@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-const auth = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // Get all pipeline deals with optional filtering
-router.get('/', auth, (req, res) => {
+router.get('/', authenticateToken, (req, res) => {
   try {
     const { stage, assigned_to, search, limit = 100, offset = 0 } = req.query;
     
@@ -48,7 +48,7 @@ router.get('/', auth, (req, res) => {
 });
 
 // Get pipeline stages summary (for kanban view)
-router.get('/stages', auth, (req, res) => {
+router.get('/stages', authenticateToken, (req, res) => {
   try {
     const stages = [
       { id: 'qualification', name: 'Qualification', probability: 20 },
@@ -80,7 +80,7 @@ router.get('/stages', auth, (req, res) => {
 });
 
 // Get single deal
-router.get('/:id', auth, (req, res) => {
+router.get('/:id', authenticateToken, (req, res) => {
   try {
     const deal = db.prepare(`
       SELECT p.*, u.name as assigned_to_name
@@ -101,7 +101,7 @@ router.get('/:id', auth, (req, res) => {
 });
 
 // Create new deal
-router.post('/', auth, (req, res) => {
+router.post('/', authenticateToken, (req, res) => {
   try {
     const {
       lead_id,
@@ -166,7 +166,7 @@ router.post('/', auth, (req, res) => {
 });
 
 // Update deal
-router.put('/:id', auth, (req, res) => {
+router.put('/:id', authenticateToken, (req, res) => {
   try {
     const {
       company_name,
@@ -240,7 +240,7 @@ router.put('/:id', auth, (req, res) => {
 });
 
 // Move deal to different stage (quick update)
-router.patch('/:id/stage', auth, (req, res) => {
+router.patch('/:id/stage', authenticateToken, (req, res) => {
   try {
     const { stage } = req.body;
     
@@ -273,7 +273,7 @@ router.patch('/:id/stage', auth, (req, res) => {
 });
 
 // Convert lead to pipeline deal
-router.post('/from-lead/:leadId', auth, (req, res) => {
+router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
   try {
     const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(req.params.leadId);
     
@@ -325,7 +325,7 @@ router.post('/from-lead/:leadId', auth, (req, res) => {
 });
 
 // Delete deal
-router.delete('/:id', auth, (req, res) => {
+router.delete('/:id', authenticateToken, (req, res) => {
   try {
     const result = db.prepare('DELETE FROM pipeline WHERE id = ?').run(req.params.id);
 
@@ -343,7 +343,7 @@ router.delete('/:id', auth, (req, res) => {
 // ==================== ACTIVITIES / CONVERSATION LOG ====================
 
 // Get all activities for a deal
-router.get('/:id/activities', auth, (req, res) => {
+router.get('/:id/activities', authenticateToken, (req, res) => {
   try {
     const activities = db.prepare(`
       SELECT a.*, u.name as created_by_name
@@ -361,7 +361,7 @@ router.get('/:id/activities', auth, (req, res) => {
 });
 
 // Add activity/note to a deal
-router.post('/:id/activities', auth, (req, res) => {
+router.post('/:id/activities', authenticateToken, (req, res) => {
   try {
     const { activity_type = 'note', title, content, contact_method, outcome, next_steps } = req.body;
 
@@ -398,7 +398,7 @@ router.post('/:id/activities', auth, (req, res) => {
 });
 
 // Delete activity
-router.delete('/:id/activities/:activityId', auth, (req, res) => {
+router.delete('/:id/activities/:activityId', authenticateToken, (req, res) => {
   try {
     const result = db.prepare('DELETE FROM pipeline_activities WHERE id = ? AND pipeline_id = ?')
       .run(req.params.activityId, req.params.id);

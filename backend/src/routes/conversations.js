@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-const auth = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // Activity types
 const ACTIVITY_TYPES = ['note', 'call', 'email', 'meeting', 'proposal', 'follow_up', 'other'];
@@ -9,7 +9,7 @@ const CONTACT_METHODS = ['phone', 'email', 'in_person', 'video_call', 'text', 'o
 const OUTCOMES = ['positive', 'neutral', 'negative', 'no_answer', 'callback_requested', 'meeting_scheduled'];
 
 // Get all conversations for an entity (lead, pipeline, client, or company)
-router.get('/', auth, (req, res) => {
+router.get('/', authenticateToken, (req, res) => {
   try {
     const { lead_id, pipeline_id, client_id, company_id, limit = 50, offset = 0 } = req.query;
     
@@ -56,7 +56,7 @@ router.get('/', auth, (req, res) => {
 });
 
 // Get full conversation history for a contact (across all stages)
-router.get('/history', auth, (req, res) => {
+router.get('/history', authenticateToken, (req, res) => {
   try {
     const { lead_id, pipeline_id, client_id, company_id } = req.query;
     
@@ -111,7 +111,7 @@ router.get('/history', auth, (req, res) => {
 });
 
 // Create a new conversation/activity
-router.post('/', auth, (req, res) => {
+router.post('/', authenticateToken, (req, res) => {
   try {
     const {
       lead_id,
@@ -171,7 +171,7 @@ router.post('/', auth, (req, res) => {
 });
 
 // Update conversation
-router.put('/:id', auth, (req, res) => {
+router.put('/:id', authenticateToken, (req, res) => {
   try {
     const {
       activity_type,
@@ -223,7 +223,7 @@ router.put('/:id', auth, (req, res) => {
 });
 
 // Delete conversation
-router.delete('/:id', auth, (req, res) => {
+router.delete('/:id', authenticateToken, (req, res) => {
   try {
     const result = db.prepare('DELETE FROM conversations WHERE id = ?').run(req.params.id);
 
@@ -239,7 +239,7 @@ router.delete('/:id', auth, (req, res) => {
 });
 
 // Link conversation to new entity (when converting lead → pipeline → client)
-router.post('/:id/link', auth, (req, res) => {
+router.post('/:id/link', authenticateToken, (req, res) => {
   try {
     const { pipeline_id, client_id, company_id } = req.body;
 
@@ -276,7 +276,7 @@ router.post('/:id/link', auth, (req, res) => {
 });
 
 // Bulk link all conversations from one entity to another
-router.post('/bulk-link', auth, (req, res) => {
+router.post('/bulk-link', authenticateToken, (req, res) => {
   try {
     const { from_lead_id, from_pipeline_id, to_pipeline_id, to_client_id, to_company_id } = req.body;
 
@@ -325,7 +325,7 @@ router.post('/bulk-link', auth, (req, res) => {
 });
 
 // Get activity types and options for dropdowns
-router.get('/options', auth, (req, res) => {
+router.get('/options', authenticateToken, (req, res) => {
   res.json({
     activity_types: ACTIVITY_TYPES,
     contact_methods: CONTACT_METHODS,
