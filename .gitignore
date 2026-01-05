@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Database
+backend/database/*.db
+
+# Environment
+.env
+*.local
+
+# Build outputs
+frontend/dist/
+backend/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
