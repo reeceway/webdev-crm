@@ -25,4 +25,5 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-CMD ["node", "backend/src/index.js"]
+WORKDIR /app/backend
+CMD ["node", "src/index.js"]
