@@ -302,4 +302,61 @@ router.delete('/:id', (req, res) => {
   }
 });
 
+// Bulk import leads
+router.post('/import', (req, res) => {
+  try {
+    const { leads } = req.body;
+    
+    if (!leads || !Array.isArray(leads)) {
+      return res.status(400).json({ error: 'leads array is required' });
+    }
+
+    const insertLead = db.prepare(`
+      INSERT INTO leads (contact_name, company_name, email, phone, website, source, status, estimated_value, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `);
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const lead of leads) {
+      try {
+        // Check if lead already exists
+        const existing = db.prepare('SELECT id FROM leads WHERE company_name = ? AND contact_name = ?')
+          .get(lead.company_name || '', lead.contact_name || '');
+        
+        if (existing) {
+          skipped++;
+          continue;
+        }
+
+        insertLead.run(
+          lead.contact_name || 'Unknown',
+          lead.company_name || '',
+          lead.email || null,
+          lead.phone || null,
+          lead.website || null,
+          lead.source || 'import',
+          lead.status || 'new',
+          lead.estimated_value || null,
+          lead.notes || null
+        );
+        imported++;
+      } catch (err) {
+        console.error('Error importing lead:', err.message);
+        skipped++;
+      }
+    }
+
+    res.json({ 
+      message: `Imported ${imported} leads, skipped ${skipped} duplicates`,
+      imported,
+      skipped
+    });
+  } catch (error) {
+    console.error('Bulk import error:', error);
+    res.status(500).json({ error: 'Failed to import leads' });
+  }
+});
+
 module.exports = router;
