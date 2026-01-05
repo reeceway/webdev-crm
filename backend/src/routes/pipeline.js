@@ -340,4 +340,78 @@ router.delete('/:id', auth, (req, res) => {
   }
 });
 
+// ==================== ACTIVITIES / CONVERSATION LOG ====================
+
+// Get all activities for a deal
+router.get('/:id/activities', auth, (req, res) => {
+  try {
+    const activities = db.prepare(`
+      SELECT a.*, u.name as created_by_name
+      FROM pipeline_activities a
+      LEFT JOIN users u ON a.created_by = u.id
+      WHERE a.pipeline_id = ?
+      ORDER BY a.created_at DESC
+    `).all(req.params.id);
+
+    res.json({ activities });
+  } catch (error) {
+    console.error('Error fetching activities:', error);
+    res.status(500).json({ error: 'Failed to fetch activities' });
+  }
+});
+
+// Add activity/note to a deal
+router.post('/:id/activities', auth, (req, res) => {
+  try {
+    const { activity_type = 'note', title, content, contact_method, outcome, next_steps } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: 'Content is required' });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO pipeline_activities (pipeline_id, activity_type, title, content, contact_method, outcome, next_steps, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      req.params.id,
+      activity_type,
+      title || null,
+      content,
+      contact_method || null,
+      outcome || null,
+      next_steps || null,
+      req.user.userId
+    );
+
+    const newActivity = db.prepare(`
+      SELECT a.*, u.name as created_by_name
+      FROM pipeline_activities a
+      LEFT JOIN users u ON a.created_by = u.id
+      WHERE a.id = ?
+    `).get(result.lastInsertRowid);
+
+    res.status(201).json(newActivity);
+  } catch (error) {
+    console.error('Error creating activity:', error);
+    res.status(500).json({ error: 'Failed to create activity' });
+  }
+});
+
+// Delete activity
+router.delete('/:id/activities/:activityId', auth, (req, res) => {
+  try {
+    const result = db.prepare('DELETE FROM pipeline_activities WHERE id = ? AND pipeline_id = ?')
+      .run(req.params.activityId, req.params.id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+
+    res.json({ message: 'Activity deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting activity:', error);
+    res.status(500).json({ error: 'Failed to delete activity' });
+  }
+});
+
 module.exports = router;

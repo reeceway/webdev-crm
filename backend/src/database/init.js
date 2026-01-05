@@ -242,6 +242,52 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_pipeline_stage ON pipeline(stage);
   CREATE INDEX IF NOT EXISTS idx_pipeline_assigned ON pipeline(assigned_to);
+
+  -- Pipeline Activities (Conversation Log)
+  CREATE TABLE IF NOT EXISTS pipeline_activities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pipeline_id INTEGER NOT NULL,
+    activity_type TEXT DEFAULT 'note',
+    title TEXT,
+    content TEXT NOT NULL,
+    contact_method TEXT,
+    outcome TEXT,
+    next_steps TEXT,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pipeline_id) REFERENCES pipeline(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pipeline_activities ON pipeline_activities(pipeline_id);
+
+  -- Universal Conversation Log (follows contact across lead → pipeline → client)
+  CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lead_id INTEGER,
+    pipeline_id INTEGER,
+    client_id INTEGER,
+    company_id INTEGER,
+    activity_type TEXT DEFAULT 'note',
+    title TEXT,
+    content TEXT NOT NULL,
+    contact_method TEXT,
+    outcome TEXT,
+    next_steps TEXT,
+    follow_up_date DATE,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL,
+    FOREIGN KEY (pipeline_id) REFERENCES pipeline(id) ON DELETE SET NULL,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id);
+  CREATE INDEX IF NOT EXISTS idx_conversations_pipeline ON conversations(pipeline_id);
+  CREATE INDEX IF NOT EXISTS idx_conversations_client ON conversations(client_id);
+  CREATE INDEX IF NOT EXISTS idx_conversations_company ON conversations(company_id);
 `);
 
 // Create default admin user

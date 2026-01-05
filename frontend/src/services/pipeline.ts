@@ -28,6 +28,20 @@ export interface PipelineStage {
   total_value: number;
 }
 
+export interface PipelineActivity {
+  id: number;
+  pipeline_id: number;
+  activity_type: string;
+  title?: string;
+  content: string;
+  contact_method?: string;
+  outcome?: string;
+  next_steps?: string;
+  created_by?: number;
+  created_by_name?: string;
+  created_at: string;
+}
+
 export const pipelineService = {
   getAll: async (params?: { stage?: string; search?: string }) => {
     const response = await api.get('/pipeline', { params });
@@ -66,6 +80,22 @@ export const pipelineService = {
 
   delete: async (id: number) => {
     const response = await api.delete(`/pipeline/${id}`);
+    return response.data;
+  },
+
+  // Activities / Conversation Log
+  getActivities: async (dealId: number) => {
+    const response = await api.get(`/pipeline/${dealId}/activities`);
+    return response.data;
+  },
+
+  addActivity: async (dealId: number, activity: Partial<PipelineActivity>) => {
+    const response = await api.post(`/pipeline/${dealId}/activities`, activity);
+    return response.data;
+  },
+
+  deleteActivity: async (dealId: number, activityId: number) => {
+    const response = await api.delete(`/pipeline/${dealId}/activities/${activityId}`);
     return response.data;
   }
 };
