@@ -58,6 +58,11 @@ export const projectsService = {
     return response.data;
   },
 
+  async logTime(id: number, data: { hours: number; description?: string }): Promise<{ actual_hours: number }> {
+    const response = await api.post<{ actual_hours: number }>(`/projects/${id}/hours`, data);
+    return response.data;
+  },
+
   async delete(id: number): Promise<void> {
     await api.delete(`/projects/${id}`);
   },

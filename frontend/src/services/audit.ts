@@ -31,6 +31,7 @@ export interface AuditResult {
   totalChecks: number;
   checks: AuditCheck[];
   recommendations: AuditRecommendation[];
+  responseTime?: number; // Top-level responseTime
   technicalDetails: {
     responseTime?: number;
     statusCode?: number;

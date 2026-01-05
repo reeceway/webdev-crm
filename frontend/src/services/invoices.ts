@@ -11,6 +11,7 @@ interface InvoicesResponse {
 interface InvoiceParams {
   search?: string;
   status?: InvoiceStatus;
+  client_id?: number;
   company_id?: number;
   project_id?: number;
   limit?: number;
@@ -26,6 +27,7 @@ interface InvoiceStats {
 }
 
 interface CreateInvoiceData {
+  client_id?: number;
   project_id?: number;
   company_id?: number;
   status?: InvoiceStatus;
@@ -35,7 +37,12 @@ interface CreateInvoiceData {
   discount?: number;
   notes?: string;
   terms?: string;
-  items?: Omit<InvoiceItem, 'id' | 'invoice_id'>[];
+  items?: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+    amount?: number;
+  }>;
 }
 
 export const invoicesService = {
@@ -79,5 +86,10 @@ export const invoicesService = {
 
   async delete(id: number): Promise<void> {
     await api.delete(`/invoices/${id}`);
+  },
+
+  async getItems(invoiceId: number): Promise<InvoiceItem[]> {
+    const response = await api.get<{ items: InvoiceItem[] }>(`/invoices/${invoiceId}/items`);
+    return response.data.items;
   },
 };

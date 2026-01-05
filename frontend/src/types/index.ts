@@ -18,6 +18,7 @@ export interface AuthResponse {
 export interface Company {
   id: number;
   name: string;
+  email?: string;
   website?: string;
   industry?: string;
   address?: string;
@@ -40,6 +41,7 @@ export interface Client {
   company_name?: string;
   first_name: string;
   last_name: string;
+  name?: string; // Computed: first_name + last_name
   email?: string;
   phone?: string;
   position?: string;
@@ -56,7 +58,7 @@ export interface Client {
 }
 
 // Project types
-export type ProjectStatus = 'proposal' | 'approved' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+export type ProjectStatus = 'proposal' | 'approved' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled' | 'active';
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 
 export interface Project {
@@ -73,6 +75,7 @@ export interface Project {
   budget?: number;
   estimated_hours?: number;
   actual_hours: number;
+  hours_logged?: number; // Alias for actual_hours
   hourly_rate?: number;
   start_date?: string;
   end_date?: string;
@@ -110,6 +113,8 @@ export interface Payment {
 
 export interface Invoice {
   id: number;
+  client_id?: number;
+  client_name?: string;
   project_id?: number;
   project_name?: string;
   company_id?: number;
@@ -127,7 +132,9 @@ export interface Invoice {
   tax_amount: number;
   discount: number;
   total: number;
+  total_amount?: number; // Alias for total
   amount_paid: number;
+  paid_amount?: number; // Alias for amount_paid
   notes?: string;
   terms?: string;
   created_at: string;
