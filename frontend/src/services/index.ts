@@ -4,6 +4,8 @@ export { clientsService } from './clients';
 export { projectsService } from './projects';
 export { invoicesService } from './invoices';
 export { leadsService } from './leads';
+export { pipelineService } from './pipeline';
+export type { PipelineDeal, PipelineStage } from './pipeline';
 export { tasksService } from './tasks';
 export { notesService } from './notes';
 export { dashboardService } from './dashboard';

@@ -10,6 +10,7 @@ import CompaniesPage from './pages/CompaniesPage';
 import ProjectsPage from './pages/ProjectsPage';
 import InvoicesPage from './pages/InvoicesPage';
 import LeadsPage from './pages/LeadsPage';
+import PipelinePage from './pages/PipelinePage';
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
             <Route path="projects" element={<ProjectsPage />} />
             <Route path="invoices" element={<InvoicesPage />} />
             <Route path="leads" element={<LeadsPage />} />
+            <Route path="pipeline" element={<PipelinePage />} />
           </Route>
 
           {/* Catch all */}

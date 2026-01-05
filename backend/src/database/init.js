@@ -217,6 +217,31 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
   CREATE INDEX IF NOT EXISTS idx_notes_client ON notes(client_id);
   CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project_id);
+
+  -- Pipeline (Sales Pipeline / Opportunities)
+  CREATE TABLE IF NOT EXISTS pipeline (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lead_id INTEGER,
+    company_name TEXT NOT NULL,
+    contact_name TEXT,
+    contact_email TEXT,
+    contact_phone TEXT,
+    deal_name TEXT NOT NULL,
+    deal_value REAL DEFAULT 0,
+    stage TEXT DEFAULT 'qualification',
+    probability INTEGER DEFAULT 20,
+    expected_close_date DATE,
+    source TEXT,
+    notes TEXT,
+    assigned_to INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL,
+    FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pipeline_stage ON pipeline(stage);
+  CREATE INDEX IF NOT EXISTS idx_pipeline_assigned ON pipeline(assigned_to);
 `);
 
 // Create default admin user

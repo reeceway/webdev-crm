@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 const fs = require('fs');
 
-// Configuration - UPDATE THESE
-const RAILWAY_URL = process.env.RAILWAY_URL || 'https://YOUR-APP.up.railway.app';
-const CSV_PATH = '/Users/reeceway/Downloads/The Play Book - Firms (1).csv';
+// Configuration
+const RAILWAY_URL = 'https://webdev-crm-production.up.railway.app';
+const CSV_PATH = process.argv[2] || '/Users/reeceway/Downloads/The Play Book - Firms (1).csv';
 
 // Parse CSV (handling quoted fields with commas)
 function parseCSV(content) {

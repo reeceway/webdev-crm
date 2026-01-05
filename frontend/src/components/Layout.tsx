@@ -18,12 +18,14 @@ import {
   Bell,
   Search,
   Plus,
+  GitBranch,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Tasks', href: '/tasks', icon: CheckSquare, highlight: true },
   { name: 'Leads', href: '/leads', icon: Target },
+  { name: 'Pipeline', href: '/pipeline', icon: GitBranch },
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Companies', href: '/companies', icon: Building2 },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
