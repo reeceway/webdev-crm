@@ -479,10 +479,7 @@ function LogHoursModal({ project, onClose, onSave }: LogHoursModalProps) {
     if (!hours) return;
     setSaving(true);
     try {
-      await projectsService.logHours(project.id, {
-        hours: parseFloat(hours),
-        description,
-      });
+      await projectsService.logHours(project.id, parseFloat(hours));
       onSave();
     } catch (error) {
       console.error('Failed to log hours:', error);
