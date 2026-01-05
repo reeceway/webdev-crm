@@ -19,6 +19,10 @@ COPY backend/ ./backend/
 # Copy frontend build
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
+# Create database directory and initialize
+RUN mkdir -p /app/backend/database
+RUN cd /app/backend && node src/database/init.js
+
 # Set environment
 ENV NODE_ENV=production
 ENV PORT=3001
