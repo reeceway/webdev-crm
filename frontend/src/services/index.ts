@@ -7,3 +7,7 @@ export { leadsService } from './leads';
 export { tasksService } from './tasks';
 export { notesService } from './notes';
 export { dashboardService } from './dashboard';
+export { auditService } from './audit';
+export type { AuditResult, AuditCheck, AuditRecommendation } from './audit';
+export { placesService } from './places';
+export type { PlaceResult, PlaceDetails, PlaceSearchResponse } from './places';

@@ -13,6 +13,8 @@ const leadRoutes = require('./routes/leads');
 const taskRoutes = require('./routes/tasks');
 const noteRoutes = require('./routes/notes');
 const dashboardRoutes = require('./routes/dashboard');
+const auditRoutes = require('./routes/audit');
+const placesRoutes = require('./routes/places');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,6 +37,8 @@ app.use('/api/leads', leadRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/places', placesRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

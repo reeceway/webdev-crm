@@ -24,8 +24,10 @@ import {
   CheckCircle,
   AlertCircle,
 } from 'lucide-react';
-import { leadsService, notesService } from '../services';
+import { leadsService, notesService, auditService, placesService } from '../services';
 import type { Lead, LeadStatus, Note, NoteType } from '../types';
+import type { AuditResult } from '../services/audit';
+import type { PlaceResult } from '../services/places';
 import { format, parseISO, isPast } from 'date-fns';
 
 const statusOptions: { value: LeadStatus | ''; label: string; color: string }[] = [
@@ -306,8 +308,9 @@ function LeadDetailPanel({ lead, onClose, onEdit, onConvert, onDelete, onUpdate 
   const [loadingNotes, setLoadingNotes] = useState(true);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [newNote, setNewNote] = useState({ content: '', note_type: 'general' as NoteType, title: '' });
-  const [auditResults, setAuditResults] = useState<any>(null);
+  const [auditResults, setAuditResults] = useState<AuditResult | null>(null);
   const [auditing, setAuditing] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   useEffect(() => {
     loadNotes();
@@ -341,48 +344,61 @@ function LeadDetailPanel({ lead, onClose, onEdit, onConvert, onDelete, onUpdate 
   };
 
   const runLeadAudit = async () => {
+    if (!lead.website) {
+      setAuditError('No website URL available for this lead');
+      return;
+    }
+    
     setAuditing(true);
-    // Simulate lead audit - in production this would call an API
-    setTimeout(() => {
-      setAuditResults({
-        website_status: lead.website ? 'active' : 'not_found',
-        social_presence: Math.random() > 0.5 ? 'strong' : 'weak',
-        tech_stack: ['WordPress', 'WooCommerce', 'Google Analytics'],
-        estimated_traffic: Math.floor(Math.random() * 10000),
-        mobile_friendly: Math.random() > 0.3,
-        ssl_enabled: Math.random() > 0.2,
-        recommendations: [
-          'Website needs mobile optimization',
-          'Missing SSL certificate',
-          'No blog or content marketing',
-          'Social media profiles incomplete',
-        ].slice(0, Math.floor(Math.random() * 3) + 1),
-      });
+    setAuditError(null);
+    
+    try {
+      const results = await auditService.runAudit(lead.website);
+      setAuditResults(results);
+    } catch (error: any) {
+      console.error('Audit failed:', error);
+      setAuditError(error.response?.data?.error || 'Failed to run audit. The website may be unreachable.');
+    } finally {
       setAuditing(false);
-    }, 2000);
+    }
   };
 
   const saveAuditAsNote = async () => {
     if (!auditResults) return;
+    
+    const checksContent = auditResults.checks.map((check: any) => {
+      const statusIcon = check.passed ? '✅' : '❌';
+      return `${statusIcon} **${check.name}:** ${check.value || (check.passed ? 'Pass' : 'Fail')}${check.message ? ` - ${check.message}` : ''}`;
+    }).join('\n');
+    
+    const recsContent = auditResults.recommendations
+      .sort((a: any, b: any) => {
+        const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      })
+      .map((rec: any) => {
+        const priorityEmoji = rec.priority === 'critical' ? '🔴' : rec.priority === 'high' ? '🟠' : rec.priority === 'medium' ? '🟡' : '🟢';
+        return `${priorityEmoji} **[${rec.priority.toUpperCase()}]** ${rec.message}`;
+      }).join('\n');
+    
     const noteContent = `
-## Website Audit Results
+## SEO Audit Results - ${auditResults.url}
 
-**Website Status:** ${auditResults.website_status}
-**Social Presence:** ${auditResults.social_presence}
-**Estimated Monthly Traffic:** ${auditResults.estimated_traffic.toLocaleString()}
-**Mobile Friendly:** ${auditResults.mobile_friendly ? 'Yes' : 'No'}
-**SSL Enabled:** ${auditResults.ssl_enabled ? 'Yes' : 'No'}
+**Overall Score:** ${auditResults.score}/100 (Grade: ${auditResults.grade})
+**Response Time:** ${auditResults.responseTime}ms
+**Audit Date:** ${new Date(auditResults.timestamp).toLocaleString()}
 
-**Tech Stack:** ${auditResults.tech_stack.join(', ')}
+### Checks Performed
+${checksContent}
 
 ### Recommendations
-${auditResults.recommendations.map((r: string) => `- ${r}`).join('\n')}
+${recsContent || 'No recommendations - site looks good!'}
     `.trim();
 
     try {
       await notesService.create({
         lead_id: lead.id,
-        title: 'Website Audit',
+        title: `SEO Audit - Score: ${auditResults.score}/100`,
         content: noteContent,
         note_type: 'general',
       });
@@ -467,7 +483,7 @@ ${auditResults.recommendations.map((r: string) => `- ${r}`).join('\n')}
       {/* Lead Audit Section */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-medium text-gray-900">Lead Audit</h3>
+          <h3 className="font-medium text-gray-900">SEO Audit</h3>
           <button
             onClick={runLeadAudit}
             disabled={auditing || !lead.website}
@@ -476,7 +492,7 @@ ${auditResults.recommendations.map((r: string) => `- ${r}`).join('\n')}
             {auditing ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500 mr-2"></div>
-                Auditing...
+                Analyzing...
               </>
             ) : (
               <>
@@ -487,43 +503,90 @@ ${auditResults.recommendations.map((r: string) => `- ${r}`).join('\n')}
           </button>
         </div>
 
+        {auditError && (
+          <div className="bg-red-50 text-red-700 rounded-lg p-3 text-sm mb-3">
+            <AlertCircle className="w-4 h-4 inline mr-1" />
+            {auditError}
+          </div>
+        )}
+
         {auditResults && (
-          <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
+          <div className="bg-gray-50 rounded-lg p-3 space-y-3 text-sm">
+            {/* Score Header */}
+            <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+              <div>
+                <span className="text-gray-600">Score</span>
+                <div className="text-2xl font-bold">
+                  <span className={
+                    auditResults.score >= 80 ? 'text-green-600' : 
+                    auditResults.score >= 60 ? 'text-yellow-600' : 
+                    auditResults.score >= 40 ? 'text-orange-600' : 'text-red-600'
+                  }>
+                    {auditResults.score}
+                  </span>
+                  <span className="text-gray-400 text-lg">/100</span>
+                </div>
+              </div>
+              <div className={`text-3xl font-bold ${
+                auditResults.grade === 'A' ? 'text-green-600' : 
+                auditResults.grade === 'B' ? 'text-yellow-600' : 
+                auditResults.grade === 'C' ? 'text-orange-600' : 'text-red-600'
+              }`}>
+                {auditResults.grade}
+              </div>
+            </div>
+
+            {/* Response Time */}
             <div className="flex items-center justify-between">
-              <span className="text-gray-600">Website</span>
-              <span className={auditResults.website_status === 'active' ? 'text-green-600' : 'text-red-600'}>
-                {auditResults.website_status === 'active' ? <CheckCircle className="w-4 h-4 inline mr-1" /> : <AlertCircle className="w-4 h-4 inline mr-1" />}
-                {auditResults.website_status}
+              <span className="text-gray-600">Response Time (TTFB)</span>
+              <span className={auditResults.responseTime < 500 ? 'text-green-600' : auditResults.responseTime < 1000 ? 'text-yellow-600' : 'text-red-600'}>
+                {auditResults.responseTime}ms
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Traffic</span>
-              <span>{auditResults.estimated_traffic.toLocaleString()}/mo</span>
+
+            {/* Key Checks */}
+            <div className="space-y-1.5 pt-2 border-t border-gray-200">
+              <p className="font-medium text-gray-700">Key Checks:</p>
+              {auditResults.checks.slice(0, 6).map((check: any, i: number) => (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="text-gray-600">{check.name}</span>
+                  <span className={check.passed ? 'text-green-600' : 'text-red-600'}>
+                    {check.passed ? <CheckCircle className="w-4 h-4 inline" /> : <AlertCircle className="w-4 h-4 inline" />}
+                  </span>
+                </div>
+              ))}
+              {auditResults.checks.length > 6 && (
+                <p className="text-gray-500 text-xs">+{auditResults.checks.length - 6} more checks</p>
+              )}
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Mobile</span>
-              <span className={auditResults.mobile_friendly ? 'text-green-600' : 'text-red-600'}>
-                {auditResults.mobile_friendly ? 'Yes' : 'No'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">SSL</span>
-              <span className={auditResults.ssl_enabled ? 'text-green-600' : 'text-red-600'}>
-                {auditResults.ssl_enabled ? 'Yes' : 'No'}
-              </span>
-            </div>
+
+            {/* Top Recommendations */}
             {auditResults.recommendations.length > 0 && (
-              <div className="pt-2 border-t">
-                <p className="font-medium text-gray-700 mb-1">Opportunities:</p>
-                <ul className="text-gray-600 space-y-1">
-                  {auditResults.recommendations.map((r: string, i: number) => (
-                    <li key={i}>• {r}</li>
-                  ))}
+              <div className="pt-2 border-t border-gray-200">
+                <p className="font-medium text-gray-700 mb-1">Top Issues:</p>
+                <ul className="text-gray-600 space-y-1.5">
+                  {auditResults.recommendations
+                    .filter((r: any) => r.priority === 'critical' || r.priority === 'high')
+                    .slice(0, 3)
+                    .map((r: any, i: number) => (
+                      <li key={i} className="flex items-start">
+                        <span className={`inline-block w-2 h-2 rounded-full mt-1.5 mr-2 flex-shrink-0 ${
+                          r.priority === 'critical' ? 'bg-red-500' : 'bg-orange-500'
+                        }`}></span>
+                        <span>{r.message}</span>
+                      </li>
+                    ))}
                 </ul>
+                {auditResults.recommendations.length > 3 && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    +{auditResults.recommendations.length - 3} more recommendations
+                  </p>
+                )}
               </div>
             )}
+
             <button onClick={saveAuditAsNote} className="btn btn-primary w-full text-sm mt-2">
-              Save as Note
+              Save Full Report as Note
             </button>
           </div>
         )}
@@ -809,58 +872,105 @@ function LeadFinderModal({ onClose, onAddLead }: LeadFinderModalProps) {
   const [industry, setIndustry] = useState('');
   const [location, setLocation] = useState('');
   const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<any[]>([]);
+  const [bulkSearching, setBulkSearching] = useState(false);
+  const [results, setResults] = useState<PlaceResult[]>([]);
+  const [totalFound, setTotalFound] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [searchInfo, setSearchInfo] = useState<string | null>(null);
 
   const handleSearch = async () => {
+    if (!industry && !location && !searchQuery) {
+      setError('Please enter at least one search criteria');
+      return;
+    }
+
     setSearching(true);
-    // Simulate lead finding - in production this would call a prospecting API
-    setTimeout(() => {
-      setResults([
-        {
-          company_name: 'Local Bakery Shop',
-          contact_name: 'Sarah Johnson',
-          email: 'sarah@localbakery.com',
-          website: 'https://localbakery.com',
-          industry: 'Food & Beverage',
-          location: 'Austin, TX',
-          notes: 'Outdated website, no mobile optimization',
-        },
-        {
-          company_name: 'Smith Law Firm',
-          contact_name: 'Michael Smith',
-          email: 'msmith@smithlaw.com',
-          website: 'https://smithlawfirm.com',
-          industry: 'Legal',
-          location: 'Austin, TX',
-          notes: 'No online booking, slow load times',
-        },
-        {
-          company_name: 'Green Landscaping',
-          contact_name: 'Tom Green',
-          email: 'tom@greenlandscaping.com',
-          website: 'https://greenlandscaping.com',
-          industry: 'Home Services',
-          location: 'Austin, TX',
-          notes: 'No website, only Facebook page',
-        },
-      ]);
+    setError(null);
+    setSearchInfo(null);
+    setResults([]);
+    setTotalFound(0);
+
+    try {
+      const response = await placesService.search({
+        query: searchQuery,
+        location: location,
+        type: industry,
+      });
+      setResults(response.results);
+      setTotalFound(response.totalFound || response.results.length);
+      if (response.results.length === 0) {
+        setError('No businesses found. Try different search criteria.');
+      }
+    } catch (err: any) {
+      console.error('Search failed:', err);
+      setError(err.response?.data?.message || err.response?.data?.error || 'Search failed. Check your API key configuration.');
+    } finally {
       setSearching(false);
-    }, 1500);
+    }
   };
 
-  const addAsLead = async (prospect: any) => {
+  const handleBulkSearch = async () => {
+    if (!industry || !location) {
+      setError('Industry and Location are required for bulk search');
+      return;
+    }
+
+    setBulkSearching(true);
+    setError(null);
+    setSearchInfo('Starting comprehensive search... This may take 1-2 minutes.');
+    setResults([]);
+    setTotalFound(0);
+
     try {
-      await leadsService.create({
-        contact_name: prospect.contact_name,
-        company_name: prospect.company_name,
-        email: prospect.email,
-        website: prospect.website,
-        source: 'Lead Finder',
-        notes: prospect.notes,
-        status: 'new',
-        probability: 30,
+      const response = await placesService.bulkSearch({
+        location: location,
+        type: industry,
+        radiusMiles: 50,
       });
-      setResults(results.filter((r) => r.email !== prospect.email));
+      setResults(response.results);
+      setTotalFound(response.totalFound || response.results.length);
+      setSearchInfo(`Found ${response.total} businesses with ${response.searchesPerformed} searches`);
+      if (response.results.length === 0) {
+        setError('No businesses found. Try a different location or category.');
+      }
+    } catch (err: any) {
+      console.error('Bulk search failed:', err);
+      setError(err.response?.data?.message || err.response?.data?.error || 'Bulk search failed.');
+    } finally {
+      setBulkSearching(false);
+    }
+  };
+
+  const addAsLead = async (place: PlaceResult) => {
+    try {
+      // Build opportunity notes
+      const opportunityNotes = [];
+      if (!place.has_website) {
+        opportunityNotes.push('❌ No website - needs web presence');
+      } else if (place.website) {
+        opportunityNotes.push(`✓ Has website: ${place.website}`);
+      }
+      if (place.rating && place.rating < 4) {
+        opportunityNotes.push(`⚠️ Low rating (${place.rating}/5) - may need reputation help`);
+      }
+      if (place.reviews_count < 20) {
+        opportunityNotes.push(`📊 Few reviews (${place.reviews_count}) - needs more visibility`);
+      }
+
+      await leadsService.create({
+        contact_name: place.name, // Company name as contact for now
+        company_name: place.name,
+        phone: place.phone || undefined,
+        website: place.website || undefined,
+        source: 'Google Places',
+        notes: `📍 ${place.address}\n\n**Opportunity Analysis:**\n${opportunityNotes.join('\n')}\n\n**Business Type:** ${place.types.slice(0, 3).join(', ')}`,
+        status: 'new',
+        probability: Math.min(80, Math.round(place.likelihood_score * 0.8)),
+        estimated_value: place.estimated_value,
+      });
+
+      setAddedIds(new Set([...addedIds, place.place_id]));
     } catch (error) {
       console.error('Failed to add lead:', error);
     }
@@ -871,14 +981,14 @@ function LeadFinderModal({ onClose, onAddLead }: LeadFinderModalProps) {
       <div className="flex items-center justify-center min-h-screen px-4">
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={onClose} />
         
-        <div className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 z-10 max-h-[90vh] overflow-y-auto">
+        <div className="relative bg-white rounded-xl shadow-xl max-w-3xl w-full p-6 z-10 max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-900 flex items-center">
                 <Sparkles className="w-6 h-6 mr-2 text-purple-500" />
                 Lead Finder
               </h2>
-              <p className="text-gray-500 text-sm">Find potential clients who need web development services</p>
+              <p className="text-gray-500 text-sm">Find businesses within 50 miles, ranked by opportunity</p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X className="w-6 h-6" />
@@ -895,16 +1005,20 @@ function LeadFinderModal({ onClose, onAddLead }: LeadFinderModalProps) {
                 className="input"
               >
                 <option value="">All Industries</option>
-                <option value="restaurant">Restaurants</option>
-                <option value="retail">Retail</option>
-                <option value="healthcare">Healthcare</option>
-                <option value="legal">Legal</option>
-                <option value="realestate">Real Estate</option>
-                <option value="homeservices">Home Services</option>
+                <option value="legal">Legal ($$$$)</option>
+                <option value="healthcare">Healthcare ($$$)</option>
+                <option value="realestate">Real Estate ($$$)</option>
+                <option value="professional">Professional Services ($$$)</option>
+                <option value="automotive">Automotive ($$)</option>
+                <option value="homeservices">Home Services ($$)</option>
+                <option value="salon">Salons & Spas ($$)</option>
+                <option value="fitness">Fitness & Gyms ($$)</option>
+                <option value="restaurant">Restaurants ($)</option>
+                <option value="retail">Retail ($)</option>
               </select>
             </div>
             <div>
-              <label className="label">Location</label>
+              <label className="label">Location (50mi radius)</label>
               <input
                 type="text"
                 value={location}
@@ -914,64 +1028,213 @@ function LeadFinderModal({ onClose, onAddLead }: LeadFinderModalProps) {
               />
             </div>
             <div>
-              <label className="label">Keywords</label>
+              <label className="label">Keywords (optional)</label>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="input"
-                placeholder="e.g., needs website"
+                placeholder="e.g., family, boutique"
               />
             </div>
           </div>
 
-          <button
-            onClick={handleSearch}
-            disabled={searching}
-            className="btn btn-primary w-full mb-6"
-          >
-            {searching ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Searching...
-              </>
-            ) : (
-              <>
-                <Search className="w-5 h-5 mr-2" />
-                Find Leads
-              </>
-            )}
-          </button>
+          <div className="flex gap-3 mb-4">
+            <button
+              onClick={handleSearch}
+              disabled={searching || bulkSearching}
+              className="btn btn-secondary flex-1"
+            >
+              {searching ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500 mr-2"></div>
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="w-5 h-5 mr-2" />
+                  Quick Search
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleBulkSearch}
+              disabled={searching || bulkSearching || !industry || !location}
+              className="btn btn-primary flex-1"
+              title={!industry || !location ? 'Select industry and location' : 'Find all businesses in category'}
+            >
+              {bulkSearching ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Finding all...
+                </>
+              ) : (
+                <>
+                  <Target className="w-5 h-5 mr-2" />
+                  Get ALL {industry ? industry.charAt(0).toUpperCase() + industry.slice(1) : 'Businesses'}
+                </>
+              )}
+            </button>
+          </div>
+
+          {bulkSearching && (
+            <div className="bg-blue-50 text-blue-700 rounded-lg p-3 mb-4 text-sm">
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                {searchInfo || 'Searching multiple keywords across the area... This takes 1-2 minutes.'}
+              </div>
+            </div>
+          )}
+
+          {/* Info Message */}
+          {searchInfo && !bulkSearching && (
+            <div className="bg-green-50 text-green-700 rounded-lg p-3 mb-4 text-sm">
+              <CheckCircle className="w-4 h-4 inline mr-2" />
+              {searchInfo}
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 text-red-700 rounded-lg p-3 mb-4 text-sm">
+              <AlertCircle className="w-4 h-4 inline mr-2" />
+              {error}
+            </div>
+          )}
 
           {/* Results */}
           {results.length > 0 && (
             <div className="space-y-3">
-              <h3 className="font-medium text-gray-900">Found {results.length} potential leads</h3>
-              {results.map((prospect, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-lg p-4 hover:border-orange-300 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium text-gray-900">{prospect.company_name}</h4>
-                      <p className="text-sm text-gray-500">{prospect.contact_name}</p>
-                      <div className="flex items-center space-x-3 mt-1 text-sm text-gray-500">
-                        <span>{prospect.industry}</span>
-                        <span>•</span>
-                        <span>{prospect.location}</span>
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-gray-900">
+                  Showing {results.length} of {totalFound} businesses
+                  <span className="text-sm font-normal text-gray-500 ml-2">
+                    (ranked by value + likelihood)
+                  </span>
+                </h3>
+                <span className="text-xs text-gray-500">
+                  50mi radius • {location}
+                </span>
+              </div>
+              {results.map((place, idx) => (
+                <div 
+                  key={place.place_id} 
+                  className={`border rounded-lg p-4 transition-colors ${
+                    addedIds.has(place.place_id) 
+                      ? 'border-green-300 bg-green-50' 
+                      : idx === 0 ? 'border-orange-400 bg-orange-50' 
+                      : 'border-gray-200 hover:border-orange-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      {/* Header with rank */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          idx === 0 ? 'bg-orange-500 text-white' :
+                          idx < 3 ? 'bg-orange-200 text-orange-800' :
+                          'bg-gray-200 text-gray-600'
+                        }`}>
+                          #{idx + 1}
+                        </span>
+                        <h4 className="font-medium text-gray-900 truncate">{place.name}</h4>
+                        {place.rating && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                            place.rating >= 4 ? 'bg-green-100 text-green-700' :
+                            place.rating >= 3 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            ★ {place.rating}
+                          </span>
+                        )}
+                        {!place.has_website && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">
+                            No Website
+                          </span>
+                        )}
                       </div>
-                      {prospect.notes && (
-                        <p className="text-sm text-orange-600 mt-2">
-                          <AlertCircle className="w-4 h-4 inline mr-1" />
-                          {prospect.notes}
-                        </p>
+                      
+                      <p className="text-sm text-gray-500 truncate">{place.address}</p>
+                      
+                      {/* Contact info */}
+                      <div className="flex flex-wrap items-center gap-3 mt-2 text-sm">
+                        {place.phone && (
+                          <a href={`tel:${place.phone}`} className="text-gray-600 hover:text-orange-500 flex items-center">
+                            <Phone className="w-3.5 h-3.5 mr-1" />
+                            {place.phone}
+                          </a>
+                        )}
+                        {place.website && (
+                          <a href={place.website} target="_blank" rel="noopener" className="text-gray-600 hover:text-orange-500 flex items-center">
+                            <Globe className="w-3.5 h-3.5 mr-1" />
+                            Website
+                            <ExternalLink className="w-3 h-3 ml-0.5" />
+                          </a>
+                        )}
+                        <span className="text-gray-400 text-xs">
+                          {place.reviews_count} reviews
+                        </span>
+                      </div>
+
+                      {/* Scoring reasons */}
+                      {place.scoring_reasons && place.scoring_reasons.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {place.scoring_reasons.slice(0, 3).map((reason, i) => (
+                            <span key={i} className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
+                              {reason}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => addAsLead(prospect)}
-                      className="btn btn-primary text-sm"
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add Lead
-                    </button>
+                    
+                    {/* Right side - scores and action */}
+                    <div className="flex-shrink-0 text-right">
+                      {/* Value estimate */}
+                      <div className="text-lg font-bold text-green-600">
+                        ${place.estimated_value.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-500 mb-2">est. project value</div>
+                      
+                      {/* Score bars */}
+                      <div className="flex gap-1 mb-2 justify-end">
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500">Opp</div>
+                          <div className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                            place.opportunity_score >= 60 ? 'bg-green-100 text-green-700' :
+                            place.opportunity_score >= 40 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {place.opportunity_score}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500">Likely</div>
+                          <div className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                            place.likelihood_score >= 50 ? 'bg-green-100 text-green-700' :
+                            place.likelihood_score >= 30 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {place.likelihood_score}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {addedIds.has(place.place_id) ? (
+                        <span className="text-green-600 text-sm flex items-center justify-end">
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Added
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => addAsLead(place)}
+                          className="btn btn-primary text-sm"
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add Lead
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
