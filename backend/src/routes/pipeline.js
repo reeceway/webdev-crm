@@ -239,11 +239,11 @@ router.put('/:id', authenticateToken, (req, res) => {
   }
 });
 
-// Move deal to different stage (quick update)
+// Move deal to different stage (quick update with auto tasks)
 router.patch('/:id/stage', authenticateToken, (req, res) => {
   try {
-    const { stage } = req.body;
-    
+    const { stage, create_tasks = true } = req.body;
+
     const stageProbabilities = {
       qualification: 20,
       meeting: 40,
@@ -254,18 +254,80 @@ router.patch('/:id/stage', authenticateToken, (req, res) => {
     };
 
     const probability = stageProbabilities[stage] ?? 20;
+    const currentDeal = db.prepare('SELECT * FROM pipeline WHERE id = ?').get(req.params.id);
+
+    if (!currentDeal) {
+      return res.status(404).json({ error: 'Deal not found' });
+    }
 
     const result = db.prepare(`
       UPDATE pipeline SET stage = ?, probability = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(stage, probability, req.params.id);
 
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Deal not found' });
+    // Create automatic tasks when moving to a new stage
+    if (create_tasks && stage !== 'closed_won' && stage !== 'closed_lost' && currentDeal.stage !== stage) {
+      const taskTemplates = {
+        qualification: [
+          { title: 'Initial outreach call', description: 'Contact lead and introduce services', priority: 'high', days_offset: 0 },
+          { title: 'Research company needs', description: 'Review their website and identify pain points', priority: 'medium', days_offset: 0 },
+          { title: 'Send introduction email', description: 'Follow up with email outlining services', priority: 'medium', days_offset: 1 }
+        ],
+        meeting: [
+          { title: 'Schedule discovery call', description: 'Set up 30-min call to discuss project', priority: 'high', days_offset: 0 },
+          { title: 'Prepare meeting agenda', description: 'Outline questions and talking points', priority: 'medium', days_offset: 1 },
+          { title: 'Send meeting invite', description: 'Calendar invite with Zoom/meeting link', priority: 'high', days_offset: 1 }
+        ],
+        proposal: [
+          { title: 'Create project proposal', description: 'Draft detailed proposal with pricing', priority: 'high', days_offset: 0 },
+          { title: 'Design mockups/wireframes', description: 'Create visual examples if needed', priority: 'medium', days_offset: 2 },
+          { title: 'Send proposal', description: 'Email proposal and schedule follow-up', priority: 'high', days_offset: 3 }
+        ],
+        negotiation: [
+          { title: 'Review proposal feedback', description: 'Address any questions or concerns', priority: 'high', days_offset: 0 },
+          { title: 'Negotiate terms', description: 'Discuss timeline, pricing, scope adjustments', priority: 'high', days_offset: 1 },
+          { title: 'Prepare contract', description: 'Draft service agreement', priority: 'medium', days_offset: 2 }
+        ]
+      };
+
+      const tasks = taskTemplates[stage] || [];
+
+      tasks.forEach((task) => {
+        const taskDueDate = new Date();
+        taskDueDate.setDate(taskDueDate.getDate() + task.days_offset);
+
+        db.prepare(`
+          INSERT INTO tasks (pipeline_id, lead_id, title, description, status, priority, due_date, assigned_to)
+          VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+        `).run(
+          req.params.id,
+          currentDeal.lead_id,
+          task.title,
+          task.description,
+          task.priority,
+          taskDueDate.toISOString().split('T')[0],
+          currentDeal.assigned_to || req.user.id
+        );
+      });
+
+      // Log stage change activity
+      db.prepare(`
+        INSERT INTO pipeline_activities (
+          pipeline_id, activity_type, title, content, created_by
+        ) VALUES (?, ?, ?, ?, ?)
+      `).run(
+        req.params.id,
+        'note',
+        `Stage updated to ${stage}`,
+        `Deal moved from ${currentDeal.stage} to ${stage}. ${tasks.length} tasks automatically created.`,
+        req.user.id
+      );
     }
 
     const updated = db.prepare('SELECT * FROM pipeline WHERE id = ?').get(req.params.id);
-    res.json(updated);
+    const newTasks = db.prepare('SELECT * FROM tasks WHERE pipeline_id = ? AND status = "pending" ORDER BY due_date ASC').all(req.params.id);
+
+    res.json({ deal: updated, tasks: newTasks });
   } catch (error) {
     console.error('Error updating stage:', error);
     res.status(500).json({ error: 'Failed to update stage' });
@@ -276,12 +338,12 @@ router.patch('/:id/stage', authenticateToken, (req, res) => {
 router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
   try {
     const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(req.params.leadId);
-    
+
     if (!lead) {
       return res.status(404).json({ error: 'Lead not found' });
     }
 
-    const { deal_name, deal_value, stage = 'qualification' } = req.body;
+    const { deal_name, deal_value, stage = 'qualification', scheduled_date } = req.body;
 
     const stageProbabilities = {
       qualification: 20,
@@ -309,18 +371,154 @@ router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
       stageProbabilities[stage],
       lead.source,
       lead.notes,
-      lead.assigned_to
+      lead.assigned_to || req.user.id
     );
+
+    const pipelineId = result.lastInsertRowid;
 
     // Update lead status to qualified
     db.prepare(`UPDATE leads SET status = 'qualified', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(req.params.leadId);
 
-    const newDeal = db.prepare('SELECT * FROM pipeline WHERE id = ?').get(result.lastInsertRowid);
-    res.status(201).json(newDeal);
+    // Create automatic tasks based on stage
+    const createTasksForStage = (stage, pipelineId, leadId, dueDate, assignedTo) => {
+      const taskTemplates = {
+        qualification: [
+          { title: 'Initial outreach call', description: 'Contact lead and introduce services', priority: 'high' },
+          { title: 'Research company needs', description: 'Review their website and identify pain points', priority: 'medium' },
+          { title: 'Send introduction email', description: 'Follow up with email outlining services', priority: 'medium' }
+        ],
+        meeting: [
+          { title: 'Schedule discovery call', description: 'Set up 30-min call to discuss project', priority: 'high' },
+          { title: 'Prepare meeting agenda', description: 'Outline questions and talking points', priority: 'medium' },
+          { title: 'Send meeting invite', description: 'Calendar invite with Zoom/meeting link', priority: 'high' }
+        ],
+        proposal: [
+          { title: 'Create project proposal', description: 'Draft detailed proposal with pricing', priority: 'high' },
+          { title: 'Design mockups/wireframes', description: 'Create visual examples if needed', priority: 'medium' },
+          { title: 'Send proposal', description: 'Email proposal and schedule follow-up', priority: 'high' }
+        ],
+        negotiation: [
+          { title: 'Review proposal feedback', description: 'Address any questions or concerns', priority: 'high' },
+          { title: 'Negotiate terms', description: 'Discuss timeline, pricing, scope adjustments', priority: 'high' },
+          { title: 'Prepare contract', description: 'Draft service agreement', priority: 'medium' }
+        ]
+      };
+
+      const tasks = taskTemplates[stage] || [];
+      const baseDueDate = dueDate ? new Date(dueDate) : new Date();
+
+      tasks.forEach((task, index) => {
+        const taskDueDate = new Date(baseDueDate);
+        taskDueDate.setDate(taskDueDate.getDate() + index); // Stagger tasks by day
+
+        db.prepare(`
+          INSERT INTO tasks (pipeline_id, lead_id, title, description, status, priority, due_date, assigned_to)
+          VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+        `).run(
+          pipelineId,
+          leadId,
+          task.title,
+          task.description,
+          task.priority,
+          taskDueDate.toISOString().split('T')[0],
+          assignedTo
+        );
+      });
+    };
+
+    // Create tasks for the current stage
+    createTasksForStage(stage, pipelineId, lead.id, scheduled_date, lead.assigned_to || req.user.id);
+
+    // Add initial pipeline activity
+    db.prepare(`
+      INSERT INTO pipeline_activities (
+        pipeline_id, activity_type, title, content, created_by
+      ) VALUES (?, ?, ?, ?, ?)
+    `).run(
+      pipelineId,
+      'note',
+      'Lead moved to pipeline',
+      `Lead "${lead.contact_name}" from ${lead.company_name || 'company'} moved to pipeline at ${stage} stage. Automatic tasks created for outreach.`,
+      req.user.id
+    );
+
+    const newDeal = db.prepare('SELECT * FROM pipeline WHERE id = ?').get(pipelineId);
+    const tasks = db.prepare('SELECT * FROM tasks WHERE pipeline_id = ?').all(pipelineId);
+
+    res.status(201).json({ deal: newDeal, tasks });
   } catch (error) {
     console.error('Error converting lead:', error);
     res.status(500).json({ error: 'Failed to convert lead to deal' });
+  }
+});
+
+// Convert won pipeline deal to client
+router.post('/:id/convert-to-client', authenticateToken, (req, res) => {
+  try {
+    const deal = db.prepare('SELECT * FROM pipeline WHERE id = ?').get(req.params.id);
+
+    if (!deal) {
+      return res.status(404).json({ error: 'Deal not found' });
+    }
+
+    // Create company if company_name exists
+    let companyId = null;
+    if (deal.company_name) {
+      const companyResult = db.prepare(`
+        INSERT INTO companies (name, website, phone)
+        VALUES (?, ?, ?)
+      `).run(deal.company_name, null, deal.contact_phone);
+      companyId = companyResult.lastInsertRowid;
+    }
+
+    // Create client
+    const nameParts = deal.contact_name.split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    const clientResult = db.prepare(`
+      INSERT INTO clients (company_id, first_name, last_name, email, phone, is_primary_contact)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(companyId, firstName, lastName, deal.contact_email, deal.contact_phone);
+
+    // Update pipeline stage to closed_won
+    db.prepare(`
+      UPDATE pipeline SET stage = 'closed_won', probability = 100, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(req.params.id);
+
+    // Update original lead if it exists
+    if (deal.lead_id) {
+      db.prepare(`
+        UPDATE leads SET status = 'won', updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      `).run(deal.lead_id);
+    }
+
+    // Log the conversion
+    db.prepare(`
+      INSERT INTO pipeline_activities (
+        pipeline_id, activity_type, title, content, created_by
+      ) VALUES (?, ?, ?, ?, ?)
+    `).run(
+      req.params.id,
+      'note',
+      'Deal won - Converted to client',
+      `Deal successfully won! Client created: ${deal.contact_name} (${deal.company_name || 'No company'})`,
+      req.user.id
+    );
+
+    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientResult.lastInsertRowid);
+    const company = companyId ? db.prepare('SELECT * FROM companies WHERE id = ?').get(companyId) : null;
+
+    res.json({
+      message: 'Deal converted to client successfully',
+      client,
+      company,
+      deal_id: deal.id
+    });
+  } catch (error) {
+    console.error('Error converting deal to client:', error);
+    res.status(500).json({ error: 'Failed to convert deal to client' });
   }
 });
 
