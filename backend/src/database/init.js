@@ -3,8 +3,8 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const dbPath = process.env.DATABASE_PATH || './database/crm.db';
-const db = new Database(path.resolve(__dirname, '../../', dbPath));
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../database/crm.db');
+const db = new Database(dbPath);
 
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
@@ -322,5 +322,20 @@ if (!existingReeceUser) {
 }
 
 console.log('✅ Database initialized successfully!');
+
+// Add missing columns to existing tables (for schema evolution)
+try {
+  db.exec(`ALTER TABLE invoices ADD COLUMN status TEXT DEFAULT 'draft';`);
+  console.log('✅ Added status column to invoices');
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.exec(`ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0;`);
+  console.log('✅ Added amount_paid column to invoices');
+} catch (e) {
+  // column already exists
+}
 
 db.close();
