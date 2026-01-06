@@ -1,9 +1,19 @@
 require('dotenv').config();
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
 const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../database/crm.db');
+
+// Ensure database directory exists
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  console.log('📁 Creating database directory:', dbDir);
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
+console.log('🔧 Database path:', dbPath);
 const db = new Database(dbPath);
 
 // Enable foreign keys

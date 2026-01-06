@@ -8,6 +8,15 @@ const logger = require('./utils/logger');
 
 // Initialize database on startup if it doesn't exist
 const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../database/crm.db');
+logger.info('Database path configured', { dbPath });
+
+// Ensure database directory exists
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  logger.info('Creating database directory', { dbDir });
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 if (!fs.existsSync(dbPath)) {
   logger.info('Database not found, initializing...', { dbPath });
   require('./database/init');
