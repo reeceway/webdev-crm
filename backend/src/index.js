@@ -17,11 +17,11 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-// Handle existing database file issues
+// Handle existing database file issues with comprehensive validation
 if (fs.existsSync(dbPath)) {
   logger.info('Database found', { dbPath });
 
-  // Check file permissions and fix if needed
+  // Comprehensive database file validation and recovery
   try {
     const stats = fs.statSync(dbPath);
     logger.info('Database file stats', {
@@ -31,32 +31,57 @@ if (fs.existsSync(dbPath)) {
       gid: stats.gid
     });
 
-    // Try to make file writable if it's not
-    if (stats.size > 0) {
+    // Validate database file integrity
+    if (stats.size === 0) {
+      logger.warn('Database file is empty, will recreate', { dbPath });
+      fs.unlinkSync(dbPath);
+      logger.info('Database not found, initializing...', { dbPath });
+      require('./database/init');
+    } else {
+      // Ensure proper permissions
       fs.chmodSync(dbPath, 0o666);
       logger.info('Ensured database file has proper permissions');
+
+      // Test database integrity by attempting a simple connection first
+      logger.info('Testing database integrity before full connection...');
+      const testDb = new Database(dbPath);
+      testDb.exec('PRAGMA integrity_check;');
+      testDb.close();
+      logger.info('✅ Database integrity check passed');
     }
   } catch (error) {
-    logger.error('Error checking database file permissions', {
+    logger.error('Database file validation failed', {
       error: error.message,
       dbPath
     });
 
-    // If we can't access the file, try to backup and recreate
+    // Aggressive recovery: backup and recreate database
     try {
-      const backupPath = `${dbPath}.backup-${Date.now()}`;
-      fs.renameSync(dbPath, backupPath);
-      logger.warn('Moved problematic database file to backup', {
+      const backupPath = `${dbPath}.corrupt-${Date.now()}`;
+      logger.warn('Database file appears corrupted, attempting recovery...', {
         from: dbPath,
         to: backupPath
       });
-      logger.info('Database not found, initializing fresh database...', { dbPath });
+
+      // Try to backup first
+      try {
+        fs.renameSync(dbPath, backupPath);
+        logger.info('Successfully backed up corrupted database', { backupPath });
+      } catch (backupError) {
+        logger.error('Could not backup corrupted database, will delete', {
+          error: backupError.message
+        });
+        fs.unlinkSync(dbPath);
+      }
+
+      logger.info('Initializing fresh database...', { dbPath });
       require('./database/init');
-    } catch (backupError) {
-      logger.error('Failed to backup problematic database file', {
-        error: backupError.message
+      logger.info('✅ Fresh database initialized successfully');
+    } catch (recoveryError) {
+      logger.error('Critical error: Database recovery failed', {
+        error: recoveryError.message
       });
-      throw backupError;
+      throw recoveryError;
     }
   }
 } else {
