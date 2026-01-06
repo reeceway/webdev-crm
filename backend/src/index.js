@@ -41,13 +41,6 @@ if (fs.existsSync(dbPath)) {
       // Ensure proper permissions
       fs.chmodSync(dbPath, 0o666);
       logger.info('Ensured database file has proper permissions');
-
-      // Test database integrity by attempting a simple connection first
-      logger.info('Testing database integrity before full connection...');
-      const testDb = new Database(dbPath);
-      testDb.exec('PRAGMA integrity_check;');
-      testDb.close();
-      logger.info('✅ Database integrity check passed');
     }
   } catch (error) {
     logger.error('Database file validation failed', {
@@ -91,8 +84,9 @@ if (fs.existsSync(dbPath)) {
 
 // Run database migrations with retry logic for Railway volume mounting
 const Database = require('better-sqlite3');
+const { setTimeout } = require('timers/promises');
 
-function connectWithRetry(dbPath, maxRetries = 5, delayMs = 1000) {
+async function connectWithRetry(dbPath, maxRetries = 10, delayMs = 2000) {
   let retries = 0;
 
   while (retries < maxRetries) {
@@ -135,13 +129,20 @@ function connectWithRetry(dbPath, maxRetries = 5, delayMs = 1000) {
 
       // Wait before retrying
       logger.info(`Waiting ${delayMs}ms before retry...`);
-      require('timers/promises').setTimeout(delayMs);
+      await setTimeout(delayMs);
     }
   }
 }
 
-// Connect to database with retry logic
-connectWithRetry(dbPath);
+// Connect to database with retry logic (wrap in async IIFE)
+(async () => {
+  try {
+    await connectWithRetry(dbPath);
+  } catch (error) {
+    logger.error('Fatal: Could not connect to database', { error: error.message });
+    process.exit(1);
+  }
+})();
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -240,7 +241,7 @@ app.get('/api/health', (req, res) => {
 if (process.env.NODE_ENV === 'production') {
   const frontendPath = path.join(__dirname, '../../frontend/dist');
   app.use(express.static(frontendPath));
-  
+
   // Handle client-side routing - serve index.html for non-API routes
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) {
