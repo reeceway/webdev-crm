@@ -300,43 +300,44 @@ export default function LeadsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-3">
                           <h3 className="font-medium text-gray-900 truncate">{lead.contact_name}</h3>
-                        <span className={`badge ${getStatusColor(lead.status)}`}>{lead.status}</span>
-                      </div>
-                      <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
-                        {lead.company_name && (
-                          <span className="flex items-center">
-                            <Building2 className="w-4 h-4 mr-1" />
-                            {lead.company_name}
-                          </span>
-                        )}
-                        {lead.email && (
-                          <span className="flex items-center">
-                            <Mail className="w-4 h-4 mr-1" />
-                            {lead.email}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <p className="font-medium text-gray-900">{formatCurrency(lead.estimated_value)}</p>
-                        <p className="text-sm text-gray-500">{lead.probability}% probability</p>
-                      </div>
-                      {lead.next_follow_up && (
-                        <div
-                          className={`text-sm ${
-                            isPast(parseISO(lead.next_follow_up)) ? 'text-red-600' : 'text-gray-500'
-                          }`}
-                        >
-                          <Clock className="w-4 h-4 inline mr-1" />
-                          {format(parseISO(lead.next_follow_up), 'MMM d')}
+                          <span className={`badge ${getStatusColor(lead.status)}`}>{lead.status}</span>
                         </div>
-                      )}
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                        <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
+                          {lead.company_name && (
+                            <span className="flex items-center">
+                              <Building2 className="w-4 h-4 mr-1" />
+                              {lead.company_name}
+                            </span>
+                          )}
+                          {lead.email && (
+                            <span className="flex items-center">
+                              <Mail className="w-4 h-4 mr-1" />
+                              {lead.email}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-right">
+                          <p className="font-medium text-gray-900">{formatCurrency(lead.estimated_value)}</p>
+                          <p className="text-sm text-gray-500">{lead.probability}% probability</p>
+                        </div>
+                        {lead.next_follow_up && (
+                          <div
+                            className={`text-sm ${
+                              isPast(parseISO(lead.next_follow_up)) ? 'text-red-600' : 'text-gray-500'
+                            }`}
+                          >
+                            <Clock className="w-4 h-4 inline mr-1" />
+                            {format(parseISO(lead.next_follow_up), 'MMM d')}
+                          </div>
+                        )}
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
