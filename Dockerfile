@@ -19,11 +19,8 @@ COPY backend/ ./backend/
 # Copy frontend build
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
-# Create database directory
+# Create database directory (Railway will mount volume here)
 RUN mkdir -p /data/database
-
-# Define volume for persistent storage
-VOLUME ["/data/database"]
 
 # Set environment
 ENV NODE_ENV=production
