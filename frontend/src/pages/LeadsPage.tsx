@@ -348,13 +348,73 @@ function LeadDetailPanel({ lead, onClose, onEdit, onConvert, onDelete, onUpdate 
       setAuditError('No website URL available for this lead');
       return;
     }
-    
+
     setAuditing(true);
     setAuditError(null);
-    
+
     try {
       const results = await auditService.runAudit(lead.website);
       setAuditResults(results);
+    } catch (error: any) {
+      console.error('Audit failed:', error);
+      setAuditError(error.response?.data?.error || 'Failed to run audit. The website may be unreachable.');
+    } finally {
+      setAuditing(false);
+    }
+  };
+
+  const runAuditAndSave = async () => {
+    if (!lead.website) {
+      setAuditError('No website URL available for this lead');
+      return;
+    }
+
+    setAuditing(true);
+    setAuditError(null);
+
+    try {
+      const results = await auditService.runAudit(lead.website);
+
+      // Immediately save to notes
+      const checksContent = results.checks.map((check: any) => {
+        const statusIcon = check.passed ? '✅' : '❌';
+        return `${statusIcon} **${check.name}:** ${check.details}`;
+      }).join('\n');
+
+      const recsContent = results.recommendations
+        .sort((a: any, b: any) => {
+          const priorityOrder: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        })
+        .map((rec: any) => {
+          const priorityEmoji = rec.priority === 'Critical' ? '🔴' : rec.priority === 'High' ? '🟠' : rec.priority === 'Medium' ? '🟡' : '🟢';
+          return `${priorityEmoji} **[${rec.priority.toUpperCase()}]** ${rec.recommendation}`;
+        }).join('\n');
+
+      const noteContent = `
+## SEO Audit Results - ${results.url}
+
+**Overall Score:** ${results.score}/${results.maxScore} (Grade: ${results.grade})
+**Response Time:** ${results.technicalDetails.responseTime || 'N/A'}ms
+**Audit Date:** ${new Date(results.timestamp).toLocaleString()}
+
+### Checks Performed
+${checksContent}
+
+### Recommendations
+${recsContent || 'No recommendations - site looks good!'}
+      `.trim();
+
+      await notesService.create({
+        lead_id: lead.id,
+        title: `SEO Audit - Score: ${results.score}/${results.maxScore} (${results.grade})`,
+        content: noteContent,
+        note_type: 'general',
+      });
+
+      loadNotes();
+      setAuditResults(null);
+      setAuditError(null);
     } catch (error: any) {
       console.error('Audit failed:', error);
       setAuditError(error.response?.data?.error || 'Failed to run audit. The website may be unreachable.');
@@ -484,23 +544,44 @@ ${recsContent || 'No recommendations - site looks good!'}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium text-gray-900">SEO Audit</h3>
-          <button
-            onClick={runLeadAudit}
-            disabled={auditing || !lead.website}
-            className="btn btn-secondary text-sm py-1"
-          >
-            {auditing ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500 mr-2"></div>
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 mr-1 text-purple-500" />
-                Run Audit
-              </>
-            )}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={runLeadAudit}
+              disabled={auditing || !lead.website}
+              className="btn btn-secondary text-sm py-1"
+              title="Run audit and review results"
+            >
+              {auditing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500 mr-2"></div>
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-1 text-purple-500" />
+                  Run Audit
+                </>
+              )}
+            </button>
+            <button
+              onClick={runAuditAndSave}
+              disabled={auditing || !lead.website}
+              className="btn btn-primary text-sm py-1"
+              title="Run audit and save directly to notes"
+            >
+              {auditing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  Audit & Save
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {auditError && (
