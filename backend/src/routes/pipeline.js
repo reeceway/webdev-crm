@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 const { authenticateToken } = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // Get all pipeline deals with optional filtering
 router.get('/', authenticateToken, (req, res) => {
@@ -464,8 +465,15 @@ router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
 
     res.status(201).json({ deal: newDeal, tasks });
   } catch (error) {
-    console.error('Error converting lead:', error);
-    res.status(500).json({ error: 'Failed to convert lead to deal' });
+    logger.error('Error converting lead to pipeline', error, {
+      leadId: req.params.leadId,
+      stage,
+      userId: req.user?.id
+    });
+    res.status(500).json({
+      error: 'Failed to convert lead to deal',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
