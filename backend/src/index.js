@@ -128,13 +128,20 @@ async function connectWithRetry(dbPath, maxRetries = 10, delayMs = 2000) {
       return;
     } catch (error) {
       retries++;
-      logger.error(`Database connection failed (attempt ${retries}/${maxRetries})`, {
-        error: error.message,
-        errorCode: error.code,
-        errorStack: error.stack,
+
+      // Log error with full details
+      console.error(JSON.stringify({
+        level: 'ERROR',
+        timestamp: new Date().toISOString(),
+        message: `Database connection failed (attempt ${retries}/${maxRetries})`,
+        error: {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
+        },
         dbPath,
         retriesLeft: maxRetries - retries
-      });
+      }));
 
       // If we've failed 3 times and the file exists, it might be corrupted
       if (retries === 3 && fs.existsSync(dbPath)) {
@@ -154,9 +161,16 @@ async function connectWithRetry(dbPath, maxRetries = 10, delayMs = 2000) {
           // Continue with retry loop
           continue;
         } catch (recoveryError) {
-          logger.error('Failed to recover from corrupted database', {
-            error: recoveryError.message
-          });
+          console.error(JSON.stringify({
+            level: 'ERROR',
+            timestamp: new Date().toISOString(),
+            message: 'Failed to recover from corrupted database',
+            error: {
+              message: recoveryError.message,
+              code: recoveryError.code,
+              stack: recoveryError.stack
+            }
+          }));
         }
       }
 
