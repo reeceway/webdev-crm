@@ -17,11 +17,51 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-if (!fs.existsSync(dbPath)) {
+// Handle existing database file issues
+if (fs.existsSync(dbPath)) {
+  logger.info('Database found', { dbPath });
+
+  // Check file permissions and fix if needed
+  try {
+    const stats = fs.statSync(dbPath);
+    logger.info('Database file stats', {
+      size: stats.size,
+      mode: stats.mode.toString(8),
+      uid: stats.uid,
+      gid: stats.gid
+    });
+
+    // Try to make file writable if it's not
+    if (stats.size > 0) {
+      fs.chmodSync(dbPath, 0o666);
+      logger.info('Ensured database file has proper permissions');
+    }
+  } catch (error) {
+    logger.error('Error checking database file permissions', {
+      error: error.message,
+      dbPath
+    });
+
+    // If we can't access the file, try to backup and recreate
+    try {
+      const backupPath = `${dbPath}.backup-${Date.now()}`;
+      fs.renameSync(dbPath, backupPath);
+      logger.warn('Moved problematic database file to backup', {
+        from: dbPath,
+        to: backupPath
+      });
+      logger.info('Database not found, initializing fresh database...', { dbPath });
+      require('./database/init');
+    } catch (backupError) {
+      logger.error('Failed to backup problematic database file', {
+        error: backupError.message
+      });
+      throw backupError;
+    }
+  }
+} else {
   logger.info('Database not found, initializing...', { dbPath });
   require('./database/init');
-} else {
-  logger.info('Database found', { dbPath });
 }
 
 // Run database migrations with retry logic for Railway volume mounting
