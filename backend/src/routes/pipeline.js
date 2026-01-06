@@ -125,12 +125,16 @@ router.post('/', authenticateToken, (req, res) => {
 
     // Calculate probability based on stage if not provided
     const stageProbabilities = {
-      qualification: 20,
-      meeting: 40,
-      proposal: 60,
-      negotiation: 80,
+      gift_sent: 20,
+      responded: 40,
+      meeting: 60,
+      closing: 80,
       closed_won: 100,
-      closed_lost: 0
+      closed_lost: 0,
+      // Legacy support
+      qualification: 20,
+      proposal: 60,
+      negotiation: 80
     };
 
     const finalProbability = probability ?? stageProbabilities[stage] ?? 20;
@@ -185,12 +189,16 @@ router.put('/:id', authenticateToken, (req, res) => {
 
     // Auto-update probability when stage changes
     const stageProbabilities = {
-      qualification: 20,
-      meeting: 40,
-      proposal: 60,
-      negotiation: 80,
+      gift_sent: 20,
+      responded: 40,
+      meeting: 60,
+      closing: 80,
       closed_won: 100,
-      closed_lost: 0
+      closed_lost: 0,
+      // Legacy support
+      qualification: 20,
+      proposal: 60,
+      negotiation: 80
     };
 
     const finalProbability = probability ?? (stage ? stageProbabilities[stage] : undefined);
@@ -245,12 +253,16 @@ router.patch('/:id/stage', authenticateToken, (req, res) => {
     const { stage, create_tasks = true } = req.body;
 
     const stageProbabilities = {
-      qualification: 20,
-      meeting: 40,
-      proposal: 60,
-      negotiation: 80,
+      gift_sent: 20,
+      responded: 40,
+      meeting: 60,
+      closing: 80,
       closed_won: 100,
-      closed_lost: 0
+      closed_lost: 0,
+      // Legacy support
+      qualification: 20,
+      proposal: 60,
+      negotiation: 80
     };
 
     const probability = stageProbabilities[stage] ?? 20;
@@ -268,28 +280,25 @@ router.patch('/:id/stage', authenticateToken, (req, res) => {
     // Create automatic tasks when moving to a new stage
     if (create_tasks && stage !== 'closed_won' && stage !== 'closed_lost' && currentDeal.stage !== stage) {
       const taskTemplates = {
-        qualification: [
-          { title: 'Run SEO audit on website', description: 'Use Audit & Save to generate SEO report with specific pain points', priority: 'high', days_offset: 0 },
-          { title: 'Research company background', description: 'Review website, social media, reviews - identify problems affecting their business', priority: 'medium', days_offset: 0 },
-          { title: 'Send gift package', description: 'Send branded gift with personalized note as warm introduction', priority: 'high', days_offset: 1 },
-          { title: 'Follow-up call after gift', description: 'Wait 3-5 days after gift delivery, then call to introduce yourself', priority: 'high', days_offset: 5 }
+        gift_sent: [
+          { title: 'Run SEO audit on website', description: 'Use Audit & Save button to generate SEO report with specific pain points', priority: 'high', days_offset: 0 },
+          { title: 'Research company background', description: 'Check website, Google reviews, social media - find business problems', priority: 'medium', days_offset: 0 },
+          { title: 'Send gift package', description: 'Send branded gift (mug, notebook, etc.) with personalized note as warm introduction', priority: 'high', days_offset: 1 }
+        ],
+        responded: [
+          { title: 'Log conversation notes', description: 'Document their response, pain points mentioned, interest level', priority: 'high', days_offset: 0 },
+          { title: 'Schedule audit presentation', description: 'Book 20-30 min call: "Free Website Audit Review"', priority: 'high', days_offset: 1 },
+          { title: 'Prepare SPIN questions', description: 'Based on audit: Problems, Implications, Need-payoff', priority: 'medium', days_offset: 1 }
         ],
         meeting: [
-          { title: 'Schedule audit presentation call', description: 'Book 20-30 min call to present audit findings and their impact', priority: 'high', days_offset: 0 },
-          { title: 'Prepare SPIN questions', description: 'Situation/Problem/Implication/Need-payoff questions based on audit results', priority: 'high', days_offset: 1 },
-          { title: 'Create audit presentation', description: 'Visual presentation showing: current issues, business impact, cost of inaction', priority: 'high', days_offset: 1 },
-          { title: 'Send meeting invite with agenda', description: 'Calendar invite: "Free Website Audit Review - Discover Hidden Issues Costing You Customers"', priority: 'medium', days_offset: 2 }
+          { title: 'Conduct audit presentation', description: 'Walk through audit, use SPIN: How is slow site affecting sales? What if competitors fix theirs first?', priority: 'high', days_offset: 0 },
+          { title: 'Send meeting follow-up', description: 'Email summary of audit findings and next steps', priority: 'medium', days_offset: 0 },
+          { title: 'Create custom proposal', description: 'Proposal based on audit: fixes for each issue, timeline, ROI projections', priority: 'high', days_offset: 1 }
         ],
-        proposal: [
-          { title: 'Present audit findings (SPIN)', description: 'Walk through audit, use SPIN to uncover pain: How is slow site affecting sales? What happens if competitors outrank you?', priority: 'high', days_offset: 0 },
-          { title: 'Create custom proposal', description: 'Proposal based on audit findings: fixes for each critical issue, timeline, ROI projections', priority: 'high', days_offset: 1 },
-          { title: 'Design before/after mockup', description: 'Visual of current site vs. proposed improvements addressing audit issues', priority: 'medium', days_offset: 2 },
-          { title: 'Send proposal with audit recap', description: 'Email: audit results, business impact, proposed solution, pricing, next steps', priority: 'high', days_offset: 3 }
-        ],
-        negotiation: [
-          { title: 'Address objections using audit data', description: 'Use specific audit findings to justify investment: "Your 3-second load time is costing X visitors/month"', priority: 'high', days_offset: 0 },
-          { title: 'Negotiate scope & pricing', description: 'Discuss timeline, payment terms, which audit issues to tackle first', priority: 'high', days_offset: 1 },
-          { title: 'Send contract & SOW', description: 'Statement of Work detailing audit fixes, deliverables, timeline, payment terms', priority: 'high', days_offset: 2 }
+        closing: [
+          { title: 'Send proposal', description: 'Email proposal with audit recap, pricing, timeline', priority: 'high', days_offset: 0 },
+          { title: 'Follow up on proposal', description: 'Call to discuss, address objections using audit data', priority: 'high', days_offset: 2 },
+          { title: 'Send contract & SOW', description: 'Statement of Work detailing deliverables and payment terms', priority: 'high', days_offset: 3 }
         ]
       };
 
@@ -346,15 +355,19 @@ router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Lead not found' });
     }
 
-    const { deal_name, deal_value, stage = 'qualification', scheduled_date } = req.body;
+    const { deal_name, deal_value, stage = 'gift_sent', scheduled_date } = req.body;
 
     const stageProbabilities = {
-      qualification: 20,
-      meeting: 40,
-      proposal: 60,
-      negotiation: 80,
+      gift_sent: 20,
+      responded: 40,
+      meeting: 60,
+      closing: 80,
       closed_won: 100,
-      closed_lost: 0
+      closed_lost: 0,
+      // Legacy support
+      qualification: 20,
+      proposal: 60,
+      negotiation: 80
     };
 
     const result = db.prepare(`
@@ -386,28 +399,25 @@ router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
     // Create automatic tasks based on stage
     const createTasksForStage = (stage, pipelineId, leadId, dueDate, assignedTo) => {
       const taskTemplates = {
-        qualification: [
-          { title: 'Run SEO audit on website', description: 'Use Audit & Save to generate SEO report with specific pain points', priority: 'high', days_offset: 0 },
-          { title: 'Research company background', description: 'Review website, social media, reviews - identify problems affecting their business', priority: 'medium', days_offset: 0 },
-          { title: 'Send gift package', description: 'Send branded gift with personalized note as warm introduction', priority: 'high', days_offset: 1 },
-          { title: 'Follow-up call after gift', description: 'Wait 3-5 days after gift delivery, then call to introduce yourself', priority: 'high', days_offset: 5 }
+        gift_sent: [
+          { title: 'Run SEO audit on website', description: 'Use Audit & Save button to generate SEO report with specific pain points', priority: 'high', days_offset: 0 },
+          { title: 'Research company background', description: 'Check website, Google reviews, social media - find business problems', priority: 'medium', days_offset: 0 },
+          { title: 'Send gift package', description: 'Send branded gift (mug, notebook, etc.) with personalized note as warm introduction', priority: 'high', days_offset: 1 }
+        ],
+        responded: [
+          { title: 'Log conversation notes', description: 'Document their response, pain points mentioned, interest level', priority: 'high', days_offset: 0 },
+          { title: 'Schedule audit presentation', description: 'Book 20-30 min call: "Free Website Audit Review"', priority: 'high', days_offset: 1 },
+          { title: 'Prepare SPIN questions', description: 'Based on audit: Problems, Implications, Need-payoff', priority: 'medium', days_offset: 1 }
         ],
         meeting: [
-          { title: 'Schedule audit presentation call', description: 'Book 20-30 min call to present audit findings and their impact', priority: 'high', days_offset: 0 },
-          { title: 'Prepare SPIN questions', description: 'Situation/Problem/Implication/Need-payoff questions based on audit results', priority: 'high', days_offset: 1 },
-          { title: 'Create audit presentation', description: 'Visual presentation showing: current issues, business impact, cost of inaction', priority: 'high', days_offset: 1 },
-          { title: 'Send meeting invite with agenda', description: 'Calendar invite: "Free Website Audit Review - Discover Hidden Issues Costing You Customers"', priority: 'medium', days_offset: 2 }
+          { title: 'Conduct audit presentation', description: 'Walk through audit, use SPIN: How is slow site affecting sales? What if competitors fix theirs first?', priority: 'high', days_offset: 0 },
+          { title: 'Send meeting follow-up', description: 'Email summary of audit findings and next steps', priority: 'medium', days_offset: 0 },
+          { title: 'Create custom proposal', description: 'Proposal based on audit: fixes for each issue, timeline, ROI projections', priority: 'high', days_offset: 1 }
         ],
-        proposal: [
-          { title: 'Present audit findings (SPIN)', description: 'Walk through audit, use SPIN to uncover pain: How is slow site affecting sales? What happens if competitors outrank you?', priority: 'high', days_offset: 0 },
-          { title: 'Create custom proposal', description: 'Proposal based on audit findings: fixes for each critical issue, timeline, ROI projections', priority: 'high', days_offset: 1 },
-          { title: 'Design before/after mockup', description: 'Visual of current site vs. proposed improvements addressing audit issues', priority: 'medium', days_offset: 2 },
-          { title: 'Send proposal with audit recap', description: 'Email: audit results, business impact, proposed solution, pricing, next steps', priority: 'high', days_offset: 3 }
-        ],
-        negotiation: [
-          { title: 'Address objections using audit data', description: 'Use specific audit findings to justify investment: "Your 3-second load time is costing X visitors/month"', priority: 'high', days_offset: 0 },
-          { title: 'Negotiate scope & pricing', description: 'Discuss timeline, payment terms, which audit issues to tackle first', priority: 'high', days_offset: 1 },
-          { title: 'Send contract & SOW', description: 'Statement of Work detailing audit fixes, deliverables, timeline, payment terms', priority: 'high', days_offset: 2 }
+        closing: [
+          { title: 'Send proposal', description: 'Email proposal with audit recap, pricing, timeline', priority: 'high', days_offset: 0 },
+          { title: 'Follow up on proposal', description: 'Call to discuss, address objections using audit data', priority: 'high', days_offset: 2 },
+          { title: 'Send contract & SOW', description: 'Statement of Work detailing deliverables and payment terms', priority: 'high', days_offset: 3 }
         ]
       };
 

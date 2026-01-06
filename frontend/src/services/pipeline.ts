@@ -97,5 +97,10 @@ export const pipelineService = {
   deleteActivity: async (dealId: number, activityId: number) => {
     const response = await api.delete(`/pipeline/${dealId}/activities/${activityId}`);
     return response.data;
+  },
+
+  convertToClient: async (dealId: number) => {
+    const response = await api.post(`/pipeline/${dealId}/convert-to-client`);
+    return response.data;
   }
 };

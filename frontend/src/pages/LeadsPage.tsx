@@ -24,7 +24,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from 'lucide-react';
-import { leadsService, notesService, auditService, placesService } from '../services';
+import { leadsService, notesService, auditService, placesService, pipelineService } from '../services';
 import type { Lead, LeadStatus, Note, NoteType } from '../types';
 import type { AuditResult } from '../services/audit';
 import type { PlaceResult } from '../services/places';
@@ -496,18 +496,83 @@ ${recsContent || 'No recommendations - site looks good!'}
         </div>
       </div>
 
-      {/* Actions */}
+      {/* Workflow Actions */}
+      <div className="p-4 border-b border-gray-200">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Move Through Sales Process</h3>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <button
+            onClick={async () => {
+              try {
+                await pipelineService.convertFromLead(lead.id, { stage: 'gift_sent' });
+                onUpdate();
+                alert('Lead moved to pipeline: Gift Sent stage!');
+              } catch (err) {
+                console.error(err);
+                alert('Failed to move to pipeline');
+              }
+            }}
+            className="btn btn-primary text-sm py-2"
+          >
+            🎁 Send Gift
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await pipelineService.convertFromLead(lead.id, { stage: 'responded' });
+                onUpdate();
+                alert('Lead moved to: Responded stage!');
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+            className="btn btn-primary text-sm py-2"
+          >
+            💬 Responded
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await pipelineService.convertFromLead(lead.id, { stage: 'meeting' });
+                onUpdate();
+                alert('Lead moved to: Meeting stage!');
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+            className="btn btn-primary text-sm py-2"
+          >
+            📞 Meeting
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await pipelineService.convertFromLead(lead.id, { stage: 'closing' });
+                onUpdate();
+                alert('Lead moved to: Closing stage!');
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+            className="btn btn-primary text-sm py-2"
+          >
+            🤝 Closing
+          </button>
+        </div>
+        <button
+          onClick={onConvert}
+          className="w-full btn bg-green-600 hover:bg-green-700 text-white text-sm py-2"
+        >
+          <UserPlus className="w-4 h-4 mr-1" />
+          Convert to Client
+        </button>
+      </div>
+
+      {/* Other Actions */}
       <div className="p-4 border-b border-gray-200 flex space-x-2">
         <button onClick={onEdit} className="btn btn-secondary flex-1 text-sm">
           <Edit2 className="w-4 h-4 mr-1" />
           Edit
         </button>
-        {lead.status !== 'won' && lead.status !== 'lost' && (
-          <button onClick={onConvert} className="btn btn-primary flex-1 text-sm">
-            <UserPlus className="w-4 h-4 mr-1" />
-            Convert
-          </button>
-        )}
         <button onClick={onDelete} className="btn btn-danger text-sm px-3">
           <Trash2 className="w-4 h-4" />
         </button>
