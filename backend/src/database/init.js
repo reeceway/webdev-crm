@@ -302,6 +302,25 @@ if (!existingUser) {
   console.log('✅ Default admin user created (admin@webdevcrm.com / admin123)');
 }
 
+// Create new admin user for reece@redemptionanalytics.com
+const existingReeceUser = db.prepare('SELECT id FROM users WHERE email = ?').get('reece@redemptionanalytics.com');
+
+if (!existingReeceUser) {
+  const hashedPassword = bcrypt.hashSync('Result66$', 10);
+  db.prepare(`
+    INSERT INTO users (email, password, name, role) 
+    VALUES (?, ?, ?, ?)
+  `).run('reece@redemptionanalytics.com', hashedPassword, 'Reece Admin', 'admin');
+  console.log('✅ Admin user created (reece@redemptionanalytics.com / Result66$)');
+  
+  // Delete old admin user if it exists
+  const oldAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@webdevcrm.com');
+  if (oldAdmin) {
+    db.prepare('DELETE FROM users WHERE email = ?').run('admin@webdevcrm.com');
+    console.log('✅ Old admin user deleted (admin@webdevcrm.com)');
+  }
+}
+
 console.log('✅ Database initialized successfully!');
 
 db.close();
