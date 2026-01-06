@@ -92,6 +92,18 @@ async function connectWithRetry(dbPath, maxRetries = 10, delayMs = 2000) {
   while (retries < maxRetries) {
     try {
       logger.info(`Attempting database connection (attempt ${retries + 1}/${maxRetries})`, { dbPath });
+
+      // Check if file is accessible before attempting connection
+      try {
+        fs.accessSync(dbPath, fs.constants.R_OK | fs.constants.W_OK);
+        logger.info('Database file is readable and writable');
+      } catch (accessError) {
+        logger.error('Database file access check failed', {
+          error: accessError.message,
+          code: accessError.code
+        });
+      }
+
       const db = new Database(dbPath);
       logger.info('✅ Database connection successful');
 
@@ -118,12 +130,42 @@ async function connectWithRetry(dbPath, maxRetries = 10, delayMs = 2000) {
       retries++;
       logger.error(`Database connection failed (attempt ${retries}/${maxRetries})`, {
         error: error.message,
+        errorCode: error.code,
+        errorStack: error.stack,
         dbPath,
         retriesLeft: maxRetries - retries
       });
 
+      // If we've failed 3 times and the file exists, it might be corrupted
+      if (retries === 3 && fs.existsSync(dbPath)) {
+        logger.warn('Database file exists but connection keeps failing - possible corruption');
+        logger.warn('Attempting to backup and recreate database...');
+
+        try {
+          const backupPath = `${dbPath}.backup-${Date.now()}`;
+          fs.renameSync(dbPath, backupPath);
+          logger.info('Backed up potentially corrupted database', { backupPath });
+
+          // Initialize new database
+          logger.info('Creating fresh database...');
+          require('./database/init');
+          logger.info('Fresh database created successfully');
+
+          // Continue with retry loop
+          continue;
+        } catch (recoveryError) {
+          logger.error('Failed to recover from corrupted database', {
+            error: recoveryError.message
+          });
+        }
+      }
+
       if (retries >= maxRetries) {
-        logger.error('❌ Maximum database connection retries exceeded', { dbPath });
+        logger.error('❌ Maximum database connection retries exceeded', {
+          dbPath,
+          finalError: error.message,
+          errorCode: error.code
+        });
         throw error;
       }
 
