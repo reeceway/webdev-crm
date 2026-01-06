@@ -182,6 +182,69 @@ router.post('/', [
       WHERE l.id = ?
     `).get(result.lastInsertRowid);
 
+    // Auto-audit: Run SEO audit and save as note if website provided
+    if (lead.website) {
+      try {
+        // Import audit function
+        const { performAudit } = require('./audit');
+
+        // Run audit
+        const auditResults = await performAudit(lead.website);
+
+        // Create audit note
+        const checksContent = auditResults.checks.map((check: any) => {
+          const statusIcon = check.passed ? '✅' : '❌';
+          return `${statusIcon} **${check.name}:** ${check.details}`;
+        }).join('\n');
+
+        const recsContent = auditResults.recommendations
+          .sort((a: any, b: any) => {
+            const priorityOrder: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          })
+          .map((rec: any) => {
+            const priorityEmoji = rec.priority === 'Critical' ? '🔴' : rec.priority === 'High' ? '🟠' : rec.priority === 'Medium' ? '🟡' : '🟢';
+            return `${priorityEmoji} **[${rec.priority.toUpperCase()}]** ${rec.recommendation}`;
+          }).join('\n');
+
+        const noteContent = `
+## Auto SEO Audit - New Lead Added
+
+**Lead:** ${lead.contact_name}${lead.company_name ? ` (${lead.company_name})` : ''}
+**Website:** ${lead.website}
+**Audit Date:** ${new Date().toLocaleString()}
+
+**Overall Score:** ${auditResults.score}/${auditResults.maxScore} (Grade: ${auditResults.grade})
+**Response Time:** ${auditResults.technicalDetails.responseTime || 'N/A'}ms
+
+### Key Findings
+${checksContent}
+
+### Recommendations
+${recsContent || 'No critical issues found - website looks good!'}
+        `.trim();
+
+        // Save audit as conversation/note
+        db.prepare(`
+          INSERT INTO conversations (
+            lead_id, activity_type, title, content, created_by
+          )
+          VALUES (?, ?, ?, ?, ?)
+        `).run(
+          lead.id,
+          'note',
+          `Auto SEO Audit - Score: ${auditResults.score}/${auditResults.maxScore} (${auditResults.grade})`,
+          noteContent,
+          req.user.id
+        );
+
+        logger.info('Auto-audit completed for new lead', { leadId: lead.id, score: auditResults.score });
+      } catch (auditError) {
+        logger.warn('Auto-audit failed for new lead', { leadId: lead.id, error: auditError.message });
+        // Don't fail lead creation if audit fails
+      }
+    }
+
     res.status(201).json({ message: 'Lead created successfully', lead });
   } catch (error) {
     console.error('Create lead error:', error);

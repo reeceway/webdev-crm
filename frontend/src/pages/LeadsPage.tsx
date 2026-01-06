@@ -62,6 +62,8 @@ export default function LeadsPage() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [menuOpen, setMenuOpen] = useState<number | null>(null);
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     loadLeads();
@@ -81,6 +83,44 @@ export default function LeadsPage() {
       setLoading(false);
     }
   };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedLeads = [...leads].sort((a, b) => {
+    let aValue: any = a[sortField as keyof Lead];
+    let bValue: any = b[sortField as keyof Lead];
+
+    // Handle special cases
+    if (sortField === 'contact_name') {
+      aValue = a.contact_name.toLowerCase();
+      bValue = b.contact_name.toLowerCase();
+    } else if (sortField === 'company_name') {
+      aValue = (a.company_name || '').toLowerCase();
+      bValue = (b.company_name || '').toLowerCase();
+    } else if (sortField === 'estimated_value') {
+      aValue = a.estimated_value || 0;
+      bValue = b.estimated_value || 0;
+    } else if (sortField === 'created_at') {
+      aValue = new Date(a.created_at).getTime();
+      bValue = new Date(b.created_at).getTime();
+    } else if (sortField === 'status') {
+      // Sort by status priority
+      const statusOrder = { 'new': 1, 'contacted': 2, 'qualified': 3, 'proposal': 4, 'negotiation': 5, 'won': 6, 'lost': 7 };
+      aValue = statusOrder[a.status as keyof typeof statusOrder] || 99;
+      bValue = statusOrder[b.status as keyof typeof statusOrder] || 99;
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
 
   const handleDelete = async (leadId: number) => {
     if (!confirm('Are you sure you want to delete this lead?')) return;
@@ -195,19 +235,71 @@ export default function LeadsPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
-              {leads.map((lead) => (
-                <div
-                  key={lead.id}
-                  onClick={() => setSelectedLead(lead)}
-                  className={`card cursor-pointer hover:border-orange-300 transition-colors ${
-                    selectedLead?.id === lead.id ? 'border-orange-500 bg-orange-50' : ''
-                  }`}
+            <div>
+              {/* Sortable Headers */}
+              <div className="bg-gray-50 border border-gray-200 rounded-t-lg px-4 py-3 hidden sm:flex">
+                <button
+                  onClick={() => handleSort('contact_name')}
+                  className="flex items-center space-x-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider flex-1 min-w-0"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3">
-                        <h3 className="font-medium text-gray-900 truncate">{lead.contact_name}</h3>
+                  <span>Contact</span>
+                  {sortField === 'contact_name' && (
+                    <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('company_name')}
+                  className="flex items-center space-x-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48"
+                >
+                  <span>Company</span>
+                  {sortField === 'company_name' && (
+                    <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('status')}
+                  className="flex items-center space-x-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32"
+                >
+                  <span>Status</span>
+                  {sortField === 'status' && (
+                    <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('estimated_value')}
+                  className="flex items-center space-x-1 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32"
+                >
+                  <span>Value</span>
+                  {sortField === 'estimated_value' && (
+                    <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('created_at')}
+                  className="flex items-center space-x-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24"
+                >
+                  <span>Created</span>
+                  {sortField === 'created_at' && (
+                    <span className="text-gray-400">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <div className="w-8"></div> {/* Space for actions */}
+              </div>
+
+              {/* Leads List */}
+              <div className="space-y-2">
+                {sortedLeads.map((lead) => (
+                  <div
+                    key={lead.id}
+                    onClick={() => setSelectedLead(lead)}
+                    className={`card cursor-pointer hover:border-orange-300 transition-colors ${
+                      selectedLead?.id === lead.id ? 'border-orange-500 bg-orange-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-3">
+                          <h3 className="font-medium text-gray-900 truncate">{lead.contact_name}</h3>
                         <span className={`badge ${getStatusColor(lead.status)}`}>{lead.status}</span>
                       </div>
                       <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
