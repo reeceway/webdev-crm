@@ -24,22 +24,59 @@ if (!fs.existsSync(dbPath)) {
   logger.info('Database found', { dbPath });
 }
 
-// Run database migrations
+// Run database migrations with retry logic for Railway volume mounting
 const Database = require('better-sqlite3');
-const db = new Database(dbPath);
-try {
-  db.exec(`ALTER TABLE invoices ADD COLUMN status TEXT DEFAULT 'draft';`);
-  logger.info('Added status column to invoices');
-} catch (e) {
-  // column already exists
+
+function connectWithRetry(dbPath, maxRetries = 5, delayMs = 1000) {
+  let retries = 0;
+
+  while (retries < maxRetries) {
+    try {
+      logger.info(`Attempting database connection (attempt ${retries + 1}/${maxRetries})`, { dbPath });
+      const db = new Database(dbPath);
+      logger.info('✅ Database connection successful');
+
+      // Test the connection
+      db.exec('PRAGMA foreign_keys = ON;');
+
+      // Run migrations
+      try {
+        db.exec(`ALTER TABLE invoices ADD COLUMN status TEXT DEFAULT 'draft';`);
+        logger.info('Added status column to invoices');
+      } catch (e) {
+        // column already exists
+      }
+      try {
+        db.exec(`ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0;`);
+        logger.info('Added amount_paid column to invoices');
+      } catch (e) {
+        // column already exists
+      }
+
+      db.close();
+      return;
+    } catch (error) {
+      retries++;
+      logger.error(`Database connection failed (attempt ${retries}/${maxRetries})`, {
+        error: error.message,
+        dbPath,
+        retriesLeft: maxRetries - retries
+      });
+
+      if (retries >= maxRetries) {
+        logger.error('❌ Maximum database connection retries exceeded', { dbPath });
+        throw error;
+      }
+
+      // Wait before retrying
+      logger.info(`Waiting ${delayMs}ms before retry...`);
+      require('timers/promises').setTimeout(delayMs);
+    }
+  }
 }
-try {
-  db.exec(`ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0;`);
-  logger.info('Added amount_paid column to invoices');
-} catch (e) {
-  // column already exists
-}
-db.close();
+
+// Connect to database with retry logic
+connectWithRetry(dbPath);
 
 // Import routes
 const authRoutes = require('./routes/auth');
