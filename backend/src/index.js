@@ -15,6 +15,23 @@ if (!fs.existsSync(dbPath)) {
   logger.info('Database found', { dbPath });
 }
 
+// Run database migrations
+const Database = require('better-sqlite3');
+const db = new Database(dbPath);
+try {
+  db.exec(`ALTER TABLE invoices ADD COLUMN status TEXT DEFAULT 'draft';`);
+  logger.info('Added status column to invoices');
+} catch (e) {
+  // column already exists
+}
+try {
+  db.exec(`ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0;`);
+  logger.info('Added amount_paid column to invoices');
+} catch (e) {
+  // column already exists
+}
+db.close();
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/clients');
