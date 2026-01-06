@@ -84,10 +84,6 @@ An open-source Customer Relationship Management system designed specifically for
    - Frontend: http://localhost:3000
    - API: http://localhost:3001
 
-### Default Login
-
-- **Email:** admin@webdevcrm.com
-- **Password:** admin123
 
 > ⚠️ Change the default password after first login!
 
