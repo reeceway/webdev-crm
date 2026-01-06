@@ -2,6 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+
+// Initialize database on startup if it doesn't exist
+const dbPath = path.join(__dirname, '../database/crm.db');
+if (!fs.existsSync(dbPath)) {
+  console.log('Database not found, initializing...');
+  require('./database/init');
+}
 
 // Import routes
 const authRoutes = require('./routes/auth');
