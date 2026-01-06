@@ -19,12 +19,16 @@ COPY backend/ ./backend/
 # Copy frontend build
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
-# Create database directory (will be mounted as volume in Railway)
-RUN mkdir -p /app/backend/database
+# Create database directory
+RUN mkdir -p /data/database
+
+# Define volume for persistent storage
+VOLUME ["/data/database"]
 
 # Set environment
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV DATABASE_PATH=/data/database/crm.db
 
 EXPOSE 3001
 

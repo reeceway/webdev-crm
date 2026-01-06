@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const logger = require('./utils/logger');
@@ -48,26 +49,49 @@ app.use((req, res, next) => {
   next();
 });
 
+// CORS configuration - restrict to specific origins in production
+const corsOptions = {
+  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+// Rate limiting configuration
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 login attempts per windowMs
+  message: 'Too many login attempts, please try again later.',
+  skipSuccessfulRequests: true,
+});
+
 // Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' })); // Add payload size limit
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/companies', companyRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/invoices', invoiceRoutes);
-app.use('/api/leads', leadRoutes);
-app.use('/api/pipeline', pipelineRoutes);
-app.use('/api/conversations', conversationRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/notes', noteRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+// API Routes with rate limiting
+app.use('/api/auth', authLimiter, authRoutes); // Stricter rate limit for auth
+app.use('/api/clients', apiLimiter, clientRoutes);
+app.use('/api/companies', apiLimiter, companyRoutes);
+app.use('/api/projects', apiLimiter, projectRoutes);
+app.use('/api/invoices', apiLimiter, invoiceRoutes);
+app.use('/api/leads', apiLimiter, leadRoutes);
+app.use('/api/pipeline', apiLimiter, pipelineRoutes);
+app.use('/api/conversations', apiLimiter, conversationRoutes);
+app.use('/api/tasks', apiLimiter, taskRoutes);
+app.use('/api/notes', apiLimiter, noteRoutes);
+app.use('/api/dashboard', apiLimiter, dashboardRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/places', placesRoutes);
 

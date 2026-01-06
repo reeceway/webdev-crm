@@ -9,66 +9,65 @@ router.use(authenticateToken);
 // Get dashboard overview
 router.get('/', (req, res) => {
   try {
-    const dashboard = {
-      // Summary counts
+    // Optimized: Single query with subqueries for all dashboard metrics
+    const dashboard = db.prepare(`
+      SELECT
+        -- Summary counts
+        (SELECT COUNT(*) FROM clients) as clients,
+        (SELECT COUNT(*) FROM companies) as companies,
+        (SELECT COUNT(*) FROM projects WHERE status = 'in_progress') as activeProjects,
+        (SELECT COUNT(*) FROM leads WHERE status NOT IN ('won', 'lost')) as openLeads,
+        (SELECT COUNT(*) FROM tasks WHERE status != 'completed') as pendingTasks,
+        (SELECT COUNT(*) FROM invoices WHERE status NOT IN ('paid', 'cancelled')) as unpaidInvoices,
+
+        -- Financial summary
+        (SELECT COALESCE(SUM(amount_paid), 0) FROM invoices) as totalRevenue,
+        (SELECT COALESCE(SUM(total - amount_paid), 0) FROM invoices WHERE status NOT IN ('paid', 'cancelled')) as pendingPayments,
+        (SELECT COALESCE(SUM(total - amount_paid), 0) FROM invoices WHERE due_date < date('now') AND status NOT IN ('paid', 'cancelled')) as overdueAmount,
+        (SELECT COALESCE(SUM(amount_paid), 0) FROM payments WHERE strftime('%Y-%m', payment_date) = strftime('%Y-%m', 'now')) as thisMonthRevenue,
+
+        -- Pipeline value
+        (SELECT COALESCE(SUM(estimated_value), 0) FROM leads WHERE status NOT IN ('won', 'lost')) as pipelineTotalValue,
+        (SELECT COALESCE(SUM(estimated_value * probability / 100), 0) FROM leads WHERE status NOT IN ('won', 'lost')) as pipelineWeightedValue,
+        (SELECT COALESCE(SUM(estimated_value), 0) FROM leads WHERE status = 'won' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now')) as wonThisMonth,
+
+        -- Urgent items
+        (SELECT COUNT(*) FROM tasks WHERE due_date < date('now') AND status != 'completed') as overdueTasks,
+        (SELECT COUNT(*) FROM tasks WHERE due_date = date('now') AND status != 'completed') as tasksDueToday,
+        (SELECT COUNT(*) FROM invoices WHERE due_date < date('now') AND status NOT IN ('paid', 'cancelled')) as overdueInvoices,
+        (SELECT COUNT(*) FROM leads WHERE next_follow_up < date('now') AND status NOT IN ('won', 'lost')) as overdueFollowUps
+    `).get();
+
+    // Structure the response
+    const response = {
       counts: {
-        clients: db.prepare('SELECT COUNT(*) as count FROM clients').get().count,
-        companies: db.prepare('SELECT COUNT(*) as count FROM companies').get().count,
-        activeProjects: db.prepare("SELECT COUNT(*) as count FROM projects WHERE status = 'in_progress'").get().count,
-        openLeads: db.prepare("SELECT COUNT(*) as count FROM leads WHERE status NOT IN ('won', 'lost')").get().count,
-        pendingTasks: db.prepare("SELECT COUNT(*) as count FROM tasks WHERE status != 'completed'").get().count,
-        unpaidInvoices: db.prepare("SELECT COUNT(*) as count FROM invoices WHERE status NOT IN ('paid', 'cancelled')").get().count
+        clients: dashboard.clients,
+        companies: dashboard.companies,
+        activeProjects: dashboard.activeProjects,
+        openLeads: dashboard.openLeads,
+        pendingTasks: dashboard.pendingTasks,
+        unpaidInvoices: dashboard.unpaidInvoices
       },
-
-      // Financial summary
       financial: {
-        totalRevenue: db.prepare('SELECT SUM(amount_paid) as total FROM invoices').get().total || 0,
-        pendingPayments: db.prepare('SELECT SUM(total - amount_paid) as total FROM invoices WHERE status NOT IN ("paid", "cancelled")').get().total || 0,
-        overdueAmount: db.prepare(`
-          SELECT SUM(total - amount_paid) as total FROM invoices 
-          WHERE due_date < date('now') AND status NOT IN ('paid', 'cancelled')
-        `).get().total || 0,
-        thisMonthRevenue: db.prepare(`
-          SELECT SUM(amount_paid) as total FROM payments 
-          WHERE strftime('%Y-%m', payment_date) = strftime('%Y-%m', 'now')
-        `).get().total || 0
+        totalRevenue: dashboard.totalRevenue,
+        pendingPayments: dashboard.pendingPayments,
+        overdueAmount: dashboard.overdueAmount,
+        thisMonthRevenue: dashboard.thisMonthRevenue
       },
-
-      // Pipeline value
       pipeline: {
-        totalValue: db.prepare('SELECT SUM(estimated_value) as total FROM leads WHERE status NOT IN ("won", "lost")').get().total || 0,
-        weightedValue: db.prepare(`
-          SELECT SUM(estimated_value * probability / 100) as total 
-          FROM leads WHERE status NOT IN ('won', 'lost')
-        `).get().total || 0,
-        wonThisMonth: db.prepare(`
-          SELECT SUM(estimated_value) as total FROM leads 
-          WHERE status = 'won' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now')
-        `).get().total || 0
+        totalValue: dashboard.pipelineTotalValue,
+        weightedValue: dashboard.pipelineWeightedValue,
+        wonThisMonth: dashboard.wonThisMonth
       },
-
-      // Urgent items
       urgent: {
-        overdueTasks: db.prepare(`
-          SELECT COUNT(*) as count FROM tasks 
-          WHERE due_date < date('now') AND status != 'completed'
-        `).get().count,
-        tasksDueToday: db.prepare(`
-          SELECT COUNT(*) as count FROM tasks 
-          WHERE due_date = date('now') AND status != 'completed'
-        `).get().count,
-        overdueInvoices: db.prepare(`
-          SELECT COUNT(*) as count FROM invoices 
-          WHERE due_date < date('now') AND status NOT IN ('paid', 'cancelled')
-        `).get().count,
-        overdueFollowUps: db.prepare(`
-          SELECT COUNT(*) as count FROM leads 
-          WHERE next_follow_up < date('now') AND status NOT IN ('won', 'lost')
-        `).get().count
+        overdueTasks: dashboard.overdueTasks,
+        tasksDueToday: dashboard.tasksDueToday,
+        overdueInvoices: dashboard.overdueInvoices,
+        overdueFollowUps: dashboard.overdueFollowUps
       }
     };
 
-    res.json(dashboard);
+    res.json(response);
   } catch (error) {
     console.error('Get dashboard error:', error);
     res.status(500).json({ error: 'Failed to fetch dashboard data' });

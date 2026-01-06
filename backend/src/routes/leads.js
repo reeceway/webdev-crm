@@ -132,11 +132,9 @@ router.get('/:id', (req, res) => {
       return res.status(404).json({ error: 'Lead not found' });
     }
 
-    // Get associated tasks
-    const tasks = db.prepare('SELECT * FROM tasks WHERE lead_id = ? ORDER BY due_date ASC').all(req.params.id);
-    
-    // Get associated notes
-    const notes = db.prepare('SELECT * FROM notes WHERE lead_id = ? ORDER BY created_at DESC').all(req.params.id);
+    // Get associated data with pagination (limit to recent 50 items)
+    const tasks = db.prepare('SELECT * FROM tasks WHERE lead_id = ? ORDER BY due_date ASC LIMIT 50').all(req.params.id);
+    const notes = db.prepare('SELECT * FROM notes WHERE lead_id = ? ORDER BY created_at DESC LIMIT 50').all(req.params.id);
 
     res.json({ ...lead, tasks, notes });
   } catch (error) {

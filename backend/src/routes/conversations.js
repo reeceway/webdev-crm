@@ -333,4 +333,165 @@ router.get('/options', authenticateToken, (req, res) => {
   });
 });
 
+// Get complete customer journey timeline (Lead → Pipeline → Client)
+router.get('/journey/:entityType/:entityId', authenticateToken, (req, res) => {
+  try {
+    const { entityType, entityId } = req.params;
+
+    let journey = {
+      stages: [],
+      conversations: [],
+      milestones: [],
+      analytics: {}
+    };
+
+    // Determine the starting point and trace the journey
+    if (entityType === 'lead') {
+      const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(entityId);
+      if (!lead) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+
+      journey.stages.push({
+        stage: 'lead',
+        entity_id: lead.id,
+        entity_type: 'lead',
+        company_name: lead.company_name,
+        contact_name: lead.contact_name,
+        status: lead.status,
+        created_at: lead.created_at,
+        updated_at: lead.updated_at
+      });
+
+      // Check if lead was converted to pipeline
+      const pipeline = db.prepare('SELECT * FROM pipeline WHERE lead_id = ?').get(entityId);
+      if (pipeline) {
+        journey.stages.push({
+          stage: 'pipeline',
+          entity_id: pipeline.id,
+          entity_type: 'pipeline',
+          deal_name: pipeline.deal_name,
+          deal_value: pipeline.deal_value,
+          stage: pipeline.stage,
+          probability: pipeline.probability,
+          created_at: pipeline.created_at,
+          updated_at: pipeline.updated_at
+        });
+
+        // Check if pipeline was converted to client
+        const client = db.prepare('SELECT c.*, comp.name as company_name FROM clients c LEFT JOIN companies comp ON c.company_id = comp.id WHERE c.id IN (SELECT id FROM clients WHERE id IN (SELECT client_id FROM pipeline WHERE id = ?))').get(pipeline.id);
+        if (client) {
+          journey.stages.push({
+            stage: 'client',
+            entity_id: client.id,
+            entity_type: 'client',
+            client_name: `${client.first_name} ${client.last_name}`,
+            company_name: client.company_name,
+            created_at: client.created_at,
+            updated_at: client.updated_at
+          });
+        }
+      }
+    } else if (entityType === 'pipeline') {
+      const pipeline = db.prepare('SELECT * FROM pipeline WHERE id = ?').get(entityId);
+      if (!pipeline) {
+        return res.status(404).json({ error: 'Pipeline not found' });
+      }
+
+      // Check if there was a lead before
+      if (pipeline.lead_id) {
+        const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(pipeline.lead_id);
+        if (lead) {
+          journey.stages.push({
+            stage: 'lead',
+            entity_id: lead.id,
+            entity_type: 'lead',
+            company_name: lead.company_name,
+            contact_name: lead.contact_name,
+            status: lead.status,
+            created_at: lead.created_at,
+            updated_at: lead.updated_at
+          });
+        }
+      }
+
+      journey.stages.push({
+        stage: 'pipeline',
+        entity_id: pipeline.id,
+        entity_type: 'pipeline',
+        deal_name: pipeline.deal_name,
+        deal_value: pipeline.deal_value,
+        stage: pipeline.stage,
+        probability: pipeline.probability,
+        created_at: pipeline.created_at,
+        updated_at: pipeline.updated_at
+      });
+    } else if (entityType === 'client') {
+      const client = db.prepare('SELECT c.*, comp.name as company_name FROM clients c LEFT JOIN companies comp ON c.company_id = comp.id WHERE c.id = ?').get(entityId);
+      if (!client) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+
+      journey.stages.push({
+        stage: 'client',
+        entity_id: client.id,
+        entity_type: 'client',
+        client_name: `${client.first_name} ${client.last_name}`,
+        company_name: client.company_name,
+        created_at: client.created_at,
+        updated_at: client.updated_at
+      });
+    }
+
+    // Get all conversations across all stages
+    const entityIds = journey.stages.map(s => s.entity_id);
+    if (entityIds.length > 0) {
+      const conversations = db.prepare(`
+        SELECT c.*, u.name as created_by_name,
+          CASE
+            WHEN c.client_id IS NOT NULL THEN 'client'
+            WHEN c.pipeline_id IS NOT NULL THEN 'pipeline'
+            WHEN c.lead_id IS NOT NULL THEN 'lead'
+            ELSE 'general'
+          END as stage
+        FROM conversations c
+        LEFT JOIN users u ON c.created_by = u.id
+        WHERE c.lead_id IN (${entityIds.join(',')})
+           OR c.pipeline_id IN (${entityIds.join(',')})
+           OR c.client_id IN (${entityIds.join(',')})
+        ORDER BY c.created_at ASC
+      `).all();
+
+      journey.conversations = conversations;
+
+      // Calculate analytics
+      journey.analytics = {
+        total_interactions: conversations.length,
+        interaction_types: conversations.reduce((acc, conv) => {
+          acc[conv.activity_type] = (acc[conv.activity_type] || 0) + 1;
+          return acc;
+        }, {}),
+        outcomes: conversations.filter(c => c.outcome).reduce((acc, conv) => {
+          acc[conv.outcome] = (acc[conv.outcome] || 0) + 1;
+          return acc;
+        }, {}),
+        time_in_each_stage: journey.stages.map(stage => ({
+          stage: stage.stage,
+          days: stage.updated_at && stage.created_at
+            ? Math.floor((new Date(stage.updated_at) - new Date(stage.created_at)) / (1000 * 60 * 60 * 24))
+            : 0
+        })),
+        total_journey_days: journey.stages.length > 0
+          ? Math.floor((new Date() - new Date(journey.stages[0].created_at)) / (1000 * 60 * 60 * 24))
+          : 0
+      };
+    }
+
+    res.json(journey);
+  } catch (error) {
+    console.error('Error fetching customer journey:', error);
+    res.status(500).json({ error: 'Failed to fetch customer journey' });
+  }
+});
+
 module.exports = router;

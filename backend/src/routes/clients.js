@@ -61,24 +61,20 @@ router.get('/', (req, res) => {
 router.get('/:id', (req, res) => {
   try {
     const client = db.prepare(`
-      SELECT c.*, comp.name as company_name 
+      SELECT c.*, comp.name as company_name
       FROM clients c
       LEFT JOIN companies comp ON c.company_id = comp.id
       WHERE c.id = ?
     `).get(req.params.id);
-    
+
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
 
-    // Get associated projects
-    const projects = db.prepare('SELECT * FROM projects WHERE client_id = ?').all(req.params.id);
-    
-    // Get associated notes
-    const notes = db.prepare('SELECT * FROM notes WHERE client_id = ? ORDER BY created_at DESC').all(req.params.id);
-    
-    // Get associated tasks
-    const tasks = db.prepare('SELECT * FROM tasks WHERE client_id = ?').all(req.params.id);
+    // Get associated data with pagination (limit to recent 50 items)
+    const projects = db.prepare('SELECT * FROM projects WHERE client_id = ? ORDER BY created_at DESC LIMIT 50').all(req.params.id);
+    const notes = db.prepare('SELECT * FROM notes WHERE client_id = ? ORDER BY created_at DESC LIMIT 50').all(req.params.id);
+    const tasks = db.prepare('SELECT * FROM tasks WHERE client_id = ? ORDER BY created_at DESC LIMIT 50').all(req.params.id);
 
     res.json({ ...client, projects, notes, tasks });
   } catch (error) {

@@ -208,15 +208,25 @@ db.exec(`
 
   -- Create indexes for better performance
   CREATE INDEX IF NOT EXISTS idx_clients_company ON clients(company_id);
+  CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
   CREATE INDEX IF NOT EXISTS idx_projects_company ON projects(company_id);
   CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+  CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at);
   CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
   CREATE INDEX IF NOT EXISTS idx_invoices_project ON invoices(project_id);
+  CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices(created_at);
   CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+  CREATE INDEX IF NOT EXISTS idx_leads_assigned_to ON leads(assigned_to);
+  CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at);
   CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
   CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+  CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
+  CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
   CREATE INDEX IF NOT EXISTS idx_notes_client ON notes(client_id);
   CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project_id);
+  CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at);
+  CREATE INDEX IF NOT EXISTS idx_notes_created_by ON notes(created_by);
+  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
   -- Pipeline (Sales Pipeline / Opportunities)
   CREATE TABLE IF NOT EXISTS pipeline (
@@ -290,35 +300,26 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_conversations_company ON conversations(company_id);
 `);
 
-// Create default admin user
-const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@webdevcrm.com');
+// Create admin user from environment variables (if provided)
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const ADMIN_NAME = process.env.ADMIN_NAME || 'Admin User';
 
-if (!existingUser) {
-  const hashedPassword = bcrypt.hashSync('admin123', 10);
-  db.prepare(`
-    INSERT INTO users (email, password, name, role) 
-    VALUES (?, ?, ?, ?)
-  `).run('admin@webdevcrm.com', hashedPassword, 'Admin User', 'admin');
-  console.log('✅ Default admin user created (admin@webdevcrm.com / admin123)');
-}
+if (ADMIN_EMAIL && ADMIN_PASSWORD) {
+  const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL);
 
-// Create new admin user for reece@redemptionanalytics.com
-const existingReeceUser = db.prepare('SELECT id FROM users WHERE email = ?').get('reece@redemptionanalytics.com');
-
-if (!existingReeceUser) {
-  const hashedPassword = bcrypt.hashSync('Result66$', 10);
-  db.prepare(`
-    INSERT INTO users (email, password, name, role) 
-    VALUES (?, ?, ?, ?)
-  `).run('reece@redemptionanalytics.com', hashedPassword, 'Reece Admin', 'admin');
-  console.log('✅ Admin user created (reece@redemptionanalytics.com / Result66$)');
-  
-  // Delete old admin user if it exists
-  const oldAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@webdevcrm.com');
-  if (oldAdmin) {
-    db.prepare('DELETE FROM users WHERE email = ?').run('admin@webdevcrm.com');
-    console.log('✅ Old admin user deleted (admin@webdevcrm.com)');
+  if (!existingAdmin) {
+    const hashedPassword = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+    db.prepare(`
+      INSERT INTO users (email, password, name, role)
+      VALUES (?, ?, ?, ?)
+    `).run(ADMIN_EMAIL, hashedPassword, ADMIN_NAME, 'admin');
+    console.log(`✅ Admin user created (${ADMIN_EMAIL})`);
+  } else {
+    console.log(`ℹ️  Admin user already exists (${ADMIN_EMAIL})`);
   }
+} else {
+  console.log('⚠️  No admin credentials provided. Set ADMIN_EMAIL and ADMIN_PASSWORD environment variables to create admin user.');
 }
 
 console.log('✅ Database initialized successfully!');

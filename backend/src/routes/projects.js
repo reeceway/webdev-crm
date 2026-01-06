@@ -135,14 +135,10 @@ router.get('/:id', (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    // Get associated tasks
-    const tasks = db.prepare('SELECT * FROM tasks WHERE project_id = ? ORDER BY due_date ASC').all(req.params.id);
-    
-    // Get associated invoices
-    const invoices = db.prepare('SELECT * FROM invoices WHERE project_id = ? ORDER BY created_at DESC').all(req.params.id);
-    
-    // Get associated notes
-    const notes = db.prepare('SELECT * FROM notes WHERE project_id = ? ORDER BY created_at DESC').all(req.params.id);
+    // Get associated data with pagination (limit to recent 50 items)
+    const tasks = db.prepare('SELECT * FROM tasks WHERE project_id = ? ORDER BY due_date ASC LIMIT 50').all(req.params.id);
+    const invoices = db.prepare('SELECT * FROM invoices WHERE project_id = ? ORDER BY created_at DESC LIMIT 50').all(req.params.id);
+    const notes = db.prepare('SELECT * FROM notes WHERE project_id = ? ORDER BY created_at DESC LIMIT 50').all(req.params.id);
 
     res.json({ ...project, tasks, invoices, notes });
   } catch (error) {
