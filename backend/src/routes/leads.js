@@ -12,7 +12,7 @@ router.use(authenticateToken);
 router.get('/', (req, res) => {
   try {
     const { search, status, source, assigned_to, limit = 50, offset = 0 } = req.query;
-    
+
     let query = `
       SELECT l.*, u.name as assigned_to_name
       FROM leads l
@@ -46,7 +46,7 @@ router.get('/', (req, res) => {
     params.push(parseInt(limit), parseInt(offset));
 
     const leads = db.prepare(query).all(...params);
-    
+
     // Get total count
     let countQuery = 'SELECT COUNT(*) as total FROM leads l WHERE 1=1';
     const countParams = [];
@@ -127,7 +127,7 @@ router.get('/:id', (req, res) => {
       LEFT JOIN users u ON l.assigned_to = u.id
       WHERE l.id = ?
     `).get(req.params.id);
-    
+
     if (!lead) {
       return res.status(404).json({ error: 'Lead not found' });
     }
@@ -154,9 +154,9 @@ router.post('/', [
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { 
+  const {
     company_name, contact_name, email, phone, website, source,
-    status = 'new', estimated_value, probability = 50, notes, 
+    status = 'new', estimated_value, probability = 50, notes,
     next_follow_up, assigned_to
   } = req.body;
 
@@ -169,7 +169,7 @@ router.post('/', [
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       company_name, contact_name, email, phone, website, source,
-      status, estimated_value, probability, notes, next_follow_up, 
+      status, estimated_value, probability, notes, next_follow_up,
       assigned_to || req.user.id
     );
 
@@ -190,17 +190,17 @@ router.post('/', [
         const auditResults = await performAudit(lead.website);
 
         // Create audit note
-        const checksContent = auditResults.checks.map((check: any) => {
+        const checksContent = auditResults.checks.map((check) => {
           const statusIcon = check.passed ? '✅' : '❌';
           return `${statusIcon} **${check.name}:** ${check.details}`;
         }).join('\n');
 
         const recsContent = auditResults.recommendations
-          .sort((a: any, b: any) => {
-            const priorityOrder: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+          .sort((a, b) => {
+            const priorityOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
             return priorityOrder[a.priority] - priorityOrder[b.priority];
           })
-          .map((rec: any) => {
+          .map((rec) => {
             const priorityEmoji = rec.priority === 'Critical' ? '🔴' : rec.priority === 'High' ? '🟠' : rec.priority === 'Medium' ? '🟡' : '🟢';
             return `${priorityEmoji} **[${rec.priority.toUpperCase()}]** ${rec.recommendation}`;
           }).join('\n');
@@ -252,7 +252,7 @@ ${recsContent || 'No critical issues found - website looks good!'}
 
 // Update lead
 router.put('/:id', (req, res) => {
-  const { 
+  const {
     company_name, contact_name, email, phone, website, source,
     status, estimated_value, probability, notes, next_follow_up, assigned_to
   } = req.body;
@@ -335,8 +335,8 @@ router.post('/:id/convert', (req, res) => {
     const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientResult.lastInsertRowid);
     const company = companyId ? db.prepare('SELECT * FROM companies WHERE id = ?').get(companyId) : null;
 
-    res.json({ 
-      message: 'Lead converted successfully', 
+    res.json({
+      message: 'Lead converted successfully',
       client,
       company,
       lead_id: lead.id
@@ -368,7 +368,7 @@ router.delete('/:id', (req, res) => {
 router.post('/import', (req, res) => {
   try {
     const { leads } = req.body;
-    
+
     if (!leads || !Array.isArray(leads)) {
       return res.status(400).json({ error: 'leads array is required' });
     }
@@ -386,7 +386,7 @@ router.post('/import', (req, res) => {
         // Check if lead already exists
         const existing = db.prepare('SELECT id FROM leads WHERE company_name = ? AND contact_name = ?')
           .get(lead.company_name || '', lead.contact_name || '');
-        
+
         if (existing) {
           skipped++;
           continue;
@@ -410,7 +410,7 @@ router.post('/import', (req, res) => {
       }
     }
 
-    res.json({ 
+    res.json({
       message: `Imported ${imported} leads, skipped ${skipped} duplicates`,
       imported,
       skipped
