@@ -3,12 +3,15 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const logger = require('./utils/logger');
 
 // Initialize database on startup if it doesn't exist
 const dbPath = path.join(__dirname, '../database/crm.db');
 if (!fs.existsSync(dbPath)) {
-  console.log('Database not found, initializing...');
+  logger.info('Database not found, initializing...', { dbPath });
   require('./database/init');
+} else {
+  logger.info('Database found', { dbPath });
 }
 
 // Import routes
@@ -28,6 +31,22 @@ const placesRoutes = require('./routes/places');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Request logging middleware (before other middleware)
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info('Request completed', {
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      duration: `${duration}ms`,
+      ip: req.ip,
+    });
+  });
+  next();
+});
 
 // Middleware
 app.use(cors());
@@ -54,7 +73,15 @@ app.use('/api/places', placesRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const dbExists = fs.existsSync(dbPath);
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+    database: dbExists ? 'connected' : 'missing',
+  };
+  logger.debug('Health check requested', health);
+  res.json(health);
 });
 
 // Serve frontend in production
@@ -73,8 +100,12 @@ if (process.env.NODE_ENV === 'production') {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
+  logger.error('Unhandled error', err, {
+    method: req.method,
+    path: req.path,
+    body: req.body,
+  });
+  res.status(500).json({
     error: 'Something went wrong!',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
@@ -86,7 +117,11 @@ app.use('/api/*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 WebDev CRM API running on http://localhost:${PORT}`);
+  logger.info('WebDev CRM API started', {
+    port: PORT,
+    env: process.env.NODE_ENV,
+    nodeVersion: process.version,
+  });
 });
 
 module.exports = app;

@@ -3,6 +3,7 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const db = require('../database/db');
 const { authenticateToken } = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // Apply auth to all routes
 router.use(authenticateToken);
@@ -70,7 +71,7 @@ router.get('/', (req, res) => {
 
     res.json({ leads, total, limit: parseInt(limit), offset: parseInt(offset) });
   } catch (error) {
-    console.error('Get leads error:', error);
+    logger.error('Get leads error', error, { search, status, source, assigned_to });
     res.status(500).json({ error: 'Failed to fetch leads' });
   }
 });
