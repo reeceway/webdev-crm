@@ -350,10 +350,22 @@ router.patch('/:id/stage', authenticateToken, (req, res) => {
 // Convert lead to pipeline deal
 router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
   try {
+    logger.info('Converting lead to pipeline', {
+      leadId: req.params.leadId,
+      userId: req.user?.id,
+      body: req.body
+    });
+
     const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(req.params.leadId);
 
     if (!lead) {
+      logger.warn('Lead not found for conversion', { leadId: req.params.leadId });
       return res.status(404).json({ error: 'Lead not found' });
+    }
+
+    if (!req.user || !req.user.id) {
+      logger.error('Missing user in request', { leadId: req.params.leadId });
+      return res.status(401).json({ error: 'User not authenticated' });
     }
 
     const { deal_name, deal_value, stage = 'gift_sent', scheduled_date } = req.body;
