@@ -19,6 +19,9 @@ COPY backend/ ./backend/
 # Copy frontend build
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
+# Create database directory (Railway will mount volume here)
+RUN mkdir -p /app/data
+
 # Set environment
 ENV NODE_ENV=production
 ENV DATABASE_PATH=/app/data/crm.db
