@@ -24,7 +24,6 @@ RUN mkdir -p /data/database
 
 # Set environment
 ENV NODE_ENV=production
-ENV PORT=3001
 ENV DATABASE_PATH=/data/database/crm.db
 
 EXPOSE 3001
