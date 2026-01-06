@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
       counts: {
         clients: db.prepare('SELECT COUNT(*) as count FROM clients').get().count,
         companies: db.prepare('SELECT COUNT(*) as count FROM companies').get().count,
-        activeProjects: db.prepare('SELECT COUNT(*) as count FROM projects WHERE status = "in_progress"').get().count,
+        activeProjects: db.prepare("SELECT COUNT(*) as count FROM projects WHERE status = 'in_progress'").get().count,
         openLeads: db.prepare('SELECT COUNT(*) as count FROM leads WHERE status NOT IN ("won", "lost")').get().count,
         pendingTasks: db.prepare('SELECT COUNT(*) as count FROM tasks WHERE status != "completed"').get().count,
         unpaidInvoices: db.prepare('SELECT COUNT(*) as count FROM invoices WHERE status NOT IN ("paid", "cancelled")').get().count

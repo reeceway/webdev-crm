@@ -383,27 +383,37 @@ router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
       negotiation: 80
     };
 
-    const result = db.prepare(`
-      INSERT INTO pipeline (
-        lead_id, company_name, contact_name, contact_email, contact_phone,
-        deal_name, deal_value, stage, probability, source, notes, assigned_to
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      lead.id,
-      lead.company_name || 'Unknown Company',
-      lead.contact_name,
-      lead.email,
-      lead.phone,
-      deal_name || `${lead.company_name || lead.contact_name} - Website Project`,
-      deal_value || lead.estimated_value || 5000,
-      stage,
-      stageProbabilities[stage],
-      lead.source,
-      lead.notes,
-      lead.assigned_to || req.user.id
-    );
-
-    const pipelineId = result.lastInsertRowid;
+    let pipelineId;
+    try {
+      const result = db.prepare(`
+        INSERT INTO pipeline (
+          lead_id, company_name, contact_name, contact_email, contact_phone,
+          deal_name, deal_value, stage, probability, source, notes, assigned_to
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        lead.id,
+        lead.company_name || 'Unknown Company',
+        lead.contact_name,
+        lead.email,
+        lead.phone,
+        deal_name || `${lead.company_name || lead.contact_name} - Website Project`,
+        deal_value || lead.estimated_value || 5000,
+        stage,
+        stageProbabilities[stage],
+        lead.source,
+        lead.notes,
+        lead.assigned_to || req.user.id
+      );
+      pipelineId = result.lastInsertRowid;
+      logger.info('Pipeline deal created', { pipelineId, leadId: lead.id });
+    } catch (insertError) {
+      logger.error('Failed to insert pipeline deal', insertError, {
+        leadId: lead.id,
+        stage,
+        assignedTo: lead.assigned_to || req.user.id
+      });
+      throw insertError;
+    }
 
     // Update lead status to qualified
     db.prepare(`UPDATE leads SET status = 'qualified', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
