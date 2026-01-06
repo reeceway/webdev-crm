@@ -485,12 +485,20 @@ router.post('/from-lead/:leadId', authenticateToken, (req, res) => {
     const newDeal = db.prepare('SELECT * FROM pipeline WHERE id = ?').get(pipelineId);
     const tasks = db.prepare('SELECT * FROM tasks WHERE pipeline_id = ?').all(pipelineId);
 
+    logger.info('Lead successfully converted to pipeline', {
+      pipelineId,
+      leadId: lead.id,
+      taskCount: tasks.length
+    });
+
     res.status(201).json({ deal: newDeal, tasks });
   } catch (error) {
     logger.error('Error converting lead to pipeline', error, {
       leadId: req.params.leadId,
-      stage,
-      userId: req.user?.id
+      stage: req.body.stage,
+      userId: req.user?.id,
+      errorMessage: error.message,
+      errorStack: error.stack
     });
     res.status(500).json({
       error: 'Failed to convert lead to deal',
