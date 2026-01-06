@@ -29,7 +29,13 @@ RUN mkdir -p /app/data
 ENV NODE_ENV=production
 ENV DATABASE_PATH=/app/data/crm.db
 
+# Copy startup script
+COPY scripts/reset-railway-db.sh /app/reset-db.sh
+RUN chmod +x /app/reset-db.sh
+
 EXPOSE 3001
 
 WORKDIR /app/backend
-CMD ["node", "src/index.js"]
+
+# Run database reset script then start the application
+CMD ["/bin/sh", "-c", "/app/reset-db.sh && node src/index.js"]
