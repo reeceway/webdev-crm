@@ -150,7 +150,7 @@ router.post('/', [
   body('contact_name').trim().notEmpty().withMessage('Contact name is required'),
   body('status').optional().isIn(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   body('probability').optional().isInt({ min: 0, max: 100 })
-], (req, res) => {
+], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
